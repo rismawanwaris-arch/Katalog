@@ -1,0 +1,313 @@
+import React, { useState, useEffect, useCallback } from 'react';
+import Navbar from './components/Navbar';
+import FilterBar from './components/FilterBar';
+import ProductCard from './components/ProductCard';
+import ProductDetailModal from './components/ProductDetailModal';
+import StoreModal from './components/StoreModal';
+import AdminDashboard from './components/admin/AdminDashboard';
+import AdminLoginPage from './components/admin/AdminLoginPage';
+import { PackageSearch, Loader2, Sparkles } from 'lucide-react';
+
+export default function App() {
+  // View Routing: 'public' or 'admin'
+  const [viewMode, setViewMode] = useState(() => {
+    return window.location.hash === '#admin' ? 'admin' : 'public';
+  });
+
+  // Store & Auth
+  const [currentStore, setCurrentStore] = useState(() => localStorage.getItem('katalog_store') || '');
+  const [outlets, setOutlets] = useState([]);
+  const [reportDate, setReportDate] = useState('');
+  const [adminToken, setAdminToken] = useState(() => sessionStorage.getItem('katalog_admin_token') || '');
+
+  // Products & Filtering
+  const [products, setProducts] = useState([]);
+  const [totalProducts, setTotalProducts] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [syncing, setSyncing] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [stockFilter, setStockFilter] = useState('ALL'); // 'ALL' or 'READY'
+  const [selectedBrand, setSelectedBrand] = useState('ALL');
+  const [selectedCategory, setSelectedCategory] = useState('ALL');
+  const [brands, setBrands] = useState([]);
+  const [categories, setCategories] = useState([]);
+
+  // Modals
+  const [isStoreModalOpen, setIsStoreModalOpen] = useState(false);
+  const [selectedProduct, setSelectedProduct] = useState(null);
+  const [isDetailOpen, setIsDetailOpen] = useState(false);
+
+  // Sync hash with viewMode
+  useEffect(() => {
+    function handleHashChange() {
+      if (window.location.hash === '#admin') {
+        setViewMode('admin');
+      } else {
+        setViewMode('public');
+      }
+    }
+    window.addEventListener('hashchange', handleHashChange);
+    return () => window.removeEventListener('hashchange', handleHashChange);
+  }, []);
+
+  function handleGoToAdmin() {
+    window.location.hash = '#admin';
+    setViewMode('admin');
+  }
+
+  function handleExitAdmin() {
+    window.location.hash = '';
+    setViewMode('public');
+    loadProducts(); // refresh products in case any items/categories changed
+  }
+
+  // Load Outlets on Mount
+  useEffect(() => {
+    async function fetchOutlets() {
+      try {
+        const res = await fetch('/api/outlets');
+        const data = await res.json();
+        if (data.success) {
+          setOutlets(data.outlets || []);
+          if (data.reportDate) setReportDate(data.reportDate);
+        }
+      } catch (err) {
+        console.error('Error fetching outlets:', err);
+      }
+    }
+    fetchOutlets();
+  }, []);
+
+  // Fetch Products
+  const loadProducts = useCallback(async () => {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams();
+      if (searchQuery.trim()) params.set('q', searchQuery.trim());
+      if (selectedBrand && selectedBrand !== 'ALL') params.set('brand', selectedBrand);
+      if (selectedCategory && selectedCategory !== 'ALL') params.set('category', selectedCategory);
+      if (currentStore) params.set('outlet', currentStore);
+      if (stockFilter === 'READY') params.set('ready', 'true');
+
+      const res = await fetch(`/api/products?${params.toString()}`);
+      const data = await res.json();
+
+      if (data.success) {
+        setProducts(data.products || []);
+        setTotalProducts(data.total || 0);
+        if (data.brands && brands.length === 0) setBrands(data.brands);
+        if (data.categories && categories.length === 0) setCategories(data.categories);
+        if (data.reportDate) setReportDate(data.reportDate);
+      }
+    } catch (err) {
+      console.error('Error loading products:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, [searchQuery, selectedBrand, selectedCategory, currentStore, stockFilter, brands.length, categories.length]);
+
+  // Debounced search & filter trigger
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      loadProducts();
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [loadProducts]);
+
+  // Store Selection Handler
+  function handleSelectStore(storeName) {
+    setCurrentStore(storeName);
+    localStorage.setItem('katalog_store', storeName);
+  }
+
+  // Trigger Real-time Stock Sync
+  async function handleTriggerSync() {
+    setSyncing(true);
+    try {
+      const res = await fetch('/api/sync-stock', { method: 'POST' });
+      const data = await res.json();
+      if (data.success) {
+        if (data.reportDate) setReportDate(data.reportDate);
+        await loadProducts();
+      }
+    } catch (err) {
+      console.error('Error syncing stock:', err);
+    } finally {
+      setSyncing(false);
+    }
+  }
+
+  // Reset Filters
+  function handleResetFilters() {
+    setSearchQuery('');
+    setStockFilter('ALL');
+    setSelectedBrand('ALL');
+    setSelectedCategory('ALL');
+  }
+
+  // Open Product Detail Modal
+  async function handleOpenDetail(itemCode) {
+    try {
+      const res = await fetch(`/api/products/${encodeURIComponent(itemCode)}?outlet=${encodeURIComponent(currentStore)}`);
+      const data = await res.json();
+      if (data.success && data.product) {
+        setSelectedProduct(data.product);
+        setIsDetailOpen(true);
+      }
+    } catch (err) {
+      console.error('Error fetching product detail:', err);
+    }
+  }
+
+  // Admin Auth
+  function handleLoginSuccess(token) {
+    setAdminToken(token);
+    sessionStorage.setItem('katalog_admin_token', token);
+  }
+
+  function handleLogoutAdmin() {
+    setAdminToken('');
+    sessionStorage.removeItem('katalog_admin_token');
+    handleExitAdmin();
+  }
+
+  // ============================================================
+  // RENDER: ADMIN DASHBOARD VIEW
+  // ============================================================
+  if (viewMode === 'admin') {
+    if (!adminToken) {
+      return (
+        <AdminLoginPage
+          onLoginSuccess={handleLoginSuccess}
+          onCancel={handleExitAdmin}
+        />
+      );
+    }
+
+    return (
+      <AdminDashboard
+        adminToken={adminToken}
+        outlets={outlets}
+        onExitAdmin={handleExitAdmin}
+        onLogout={handleLogoutAdmin}
+      />
+    );
+  }
+
+  // ============================================================
+  // RENDER: PUBLIC CATALOG VIEW
+  // ============================================================
+  return (
+    <div className="min-h-screen flex flex-col bg-slate-50 text-slate-800">
+      
+      {/* Top Navbar */}
+      <Navbar
+        currentStore={currentStore}
+        onOpenStoreModal={() => setIsStoreModalOpen(true)}
+        adminToken={adminToken}
+        onGoToAdmin={handleGoToAdmin}
+        syncing={syncing}
+        onTriggerSync={handleTriggerSync}
+        reportDate={reportDate}
+      />
+
+      {/* Main Container */}
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex-1 w-full">
+        
+        {/* Filter Bar with Store Status & Stock Tabs */}
+        <FilterBar
+          currentStore={currentStore}
+          reportDate={reportDate}
+          syncing={syncing}
+          onTriggerSync={handleTriggerSync}
+          searchQuery={searchQuery}
+          onSearchChange={setSearchQuery}
+          stockFilter={stockFilter}
+          onStockFilterChange={setStockFilter}
+          selectedBrand={selectedBrand}
+          onBrandChange={setSelectedBrand}
+          brands={brands}
+          selectedCategory={selectedCategory}
+          onCategoryChange={setSelectedCategory}
+          categories={categories}
+          totalItems={totalProducts}
+          onResetFilters={handleResetFilters}
+        />
+
+        {/* Product Grid Area */}
+        {loading ? (
+          <div className="flex flex-col items-center justify-center py-20 bg-white rounded-2xl border border-slate-200/80 p-8 text-center">
+            <Loader2 className="w-10 h-10 text-sky-600 animate-spin mb-4" />
+            <p className="text-slate-600 font-semibold text-sm">
+              Memuat katalog produk &amp; mencocokkan stok cabang {currentStore ? `"${currentStore}"` : ''}...
+            </p>
+          </div>
+        ) : products.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-16 bg-white rounded-2xl border border-slate-200/80 p-8 text-center">
+            <div className="w-16 h-16 rounded-2xl bg-slate-100 flex items-center justify-center text-slate-400 mb-4">
+              <PackageSearch className="w-8 h-8" />
+            </div>
+            <h3 className="text-base font-bold text-slate-800 mb-1">
+              Tidak Ada Produk yang Ditemukan
+            </h3>
+            <p className="text-xs sm:text-sm text-slate-500 max-w-md mb-4">
+              {stockFilter === 'READY' && currentStore
+                ? `Tidak ada item yang memiliki stok ready di toko ${currentStore} dengan filter saat ini.`
+                : 'Coba ubah kata kunci pencarian atau reset filter untuk melihat item lainnya.'}
+            </p>
+            <button
+              onClick={handleResetFilters}
+              className="px-4 py-2 bg-sky-700 text-white rounded-xl text-xs font-bold hover:bg-sky-800 transition"
+            >
+              Reset Semua Filter
+            </button>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-5">
+            {products.map(p => (
+              <ProductCard
+                key={p.item_code}
+                product={p}
+                currentStore={currentStore}
+                onOpenDetail={handleOpenDetail}
+              />
+            ))}
+          </div>
+        )}
+
+      </main>
+
+      {/* Footer */}
+      <footer className="mt-auto py-6 border-t border-slate-200 bg-white text-center text-xs text-slate-400">
+        <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
+          <span>
+            Katalog Aksesoris &amp; Product Knowledge © 2026. Terhubung API Stok Cabang.
+          </span>
+          <button
+            onClick={handleGoToAdmin}
+            className="flex items-center gap-1 text-slate-500 hover:text-sky-700 font-medium transition"
+          >
+            <Sparkles className="w-3.5 h-3.5 text-sky-600" /> Masuk Panel Admin
+          </button>
+        </div>
+      </footer>
+
+      {/* Modals */}
+      <StoreModal
+        isOpen={isStoreModalOpen}
+        onClose={() => setIsStoreModalOpen(false)}
+        outlets={outlets}
+        currentStore={currentStore}
+        onSelectStore={handleSelectStore}
+      />
+
+      <ProductDetailModal
+        isOpen={isDetailOpen}
+        onClose={() => setIsDetailOpen(false)}
+        product={selectedProduct}
+        currentStore={currentStore}
+      />
+
+    </div>
+  );
+}
