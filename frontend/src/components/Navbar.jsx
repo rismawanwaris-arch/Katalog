@@ -1,5 +1,5 @@
 import React from 'react';
-import { MapPin, Lock, LogOut, PlusCircle, RefreshCw, Smartphone } from 'lucide-react';
+import { MapPin, Lock, LogOut, PlusCircle, RefreshCw, Smartphone, ArrowLeftRight } from 'lucide-react';
 
 export default function Navbar({
   currentStore,
@@ -8,7 +8,9 @@ export default function Navbar({
   onGoToAdmin,
   syncing,
   onTriggerSync,
-  reportDate
+  reportDate,
+  comparedCount = 0,
+  onOpenCompare
 }) {
   return (
     <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-sm transition-all">
@@ -33,6 +35,21 @@ export default function Navbar({
           {/* Actions: Store Selector & Admin */}
           <div className="flex items-center gap-2 sm:gap-3 shrink-0">
             
+            {/* Compare Badge Button (if products are selected) */}
+            {comparedCount > 0 && (
+              <button
+                onClick={onOpenCompare}
+                className="flex items-center gap-1.5 px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl bg-sky-600 hover:bg-sky-700 text-white text-xs sm:text-sm font-bold transition-all duration-150 active:scale-95 shadow-sm animate-fade-fast cursor-pointer"
+                title="Buka Perbandingan Produk"
+              >
+                <ArrowLeftRight className="w-4 h-4" />
+                <span className="hidden sm:inline">Bandingkan</span>
+                <span className="bg-white text-sky-800 text-[10px] font-black px-1.5 py-0.5 rounded-full">
+                  {comparedCount}
+                </span>
+              </button>
+            )}
+
             {/* Store Badge Button */}
             <button
               onClick={onOpenStoreModal}

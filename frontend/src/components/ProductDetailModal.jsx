@@ -1,8 +1,15 @@
 import React, { useState } from 'react';
-import { X, ExternalLink, CheckCircle2, AlertCircle, Store, ShieldCheck } from 'lucide-react';
+import { X, ExternalLink, CheckCircle2, AlertCircle, Store, ShieldCheck, ArrowLeftRight } from 'lucide-react';
 import { getProductImageSrc, getProductPlaceholderSrc, getBrandTheme, formatRupiah } from '../utils/productUtils';
 
-export default function ProductDetailModal({ isOpen, onClose, product, currentStore }) {
+export default function ProductDetailModal({
+  isOpen,
+  onClose,
+  product,
+  currentStore,
+  isCompared = false,
+  onToggleCompare
+}) {
   const [imgError, setImgError] = useState(false);
 
   if (!isOpen || !product) return null;
@@ -201,10 +208,25 @@ export default function ProductDetailModal({ isOpen, onClose, product, currentSt
         </div>
 
         {/* Modal Footer */}
-        <div className="p-4 bg-slate-50 border-t border-slate-100 flex items-center justify-end">
+        <div className="p-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between gap-3">
+          {onToggleCompare && (
+            <button
+              type="button"
+              onClick={() => onToggleCompare(product)}
+              className={`inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold transition shadow-xs cursor-pointer ${
+                isCompared
+                  ? 'bg-sky-600 text-white hover:bg-sky-700'
+                  : 'bg-white hover:bg-sky-50 text-slate-700 hover:text-sky-800 border border-slate-200'
+              }`}
+            >
+              <ArrowLeftRight className="w-4 h-4" />
+              <span>{isCompared ? 'Produk Masuk Komparasi (Lepas)' : '+ Tambah ke Perbandingan'}</span>
+            </button>
+          )}
+
           <button
             onClick={onClose}
-            className="px-5 py-2 bg-slate-900 text-white font-semibold text-xs sm:text-sm rounded-xl hover:bg-slate-800 transition"
+            className="px-5 py-2 bg-slate-900 text-white font-semibold text-xs sm:text-sm rounded-xl hover:bg-slate-800 transition ml-auto"
           >
             Tutup Detail
           </button>

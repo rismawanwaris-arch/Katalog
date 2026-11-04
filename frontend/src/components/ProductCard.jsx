@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { CheckCircle2, AlertCircle, Info, Eye } from 'lucide-react';
+import { CheckCircle2, AlertCircle, Info, Eye, ArrowLeftRight } from 'lucide-react';
 import { getProductImageSrc, getProductPlaceholderSrc, getBrandTheme, formatRupiah } from '../utils/productUtils';
 
 function LazyProductImage({ src, fallbackUrl, alt }) {
@@ -53,7 +53,13 @@ function LazyProductImage({ src, fallbackUrl, alt }) {
   );
 }
 
-export default function ProductCard({ product, currentStore, onOpenDetail }) {
+export default function ProductCard({
+  product,
+  currentStore,
+  onOpenDetail,
+  isCompared = false,
+  onToggleCompare
+}) {
   const theme = getBrandTheme(product.brand);
 
   const fallbackUrl = getProductPlaceholderSrc(
@@ -148,16 +154,27 @@ export default function ProductCard({ product, currentStore, onOpenDetail }) {
         </div>
 
         {/* Footer Actions */}
-        <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-2 mt-auto">
-          <span className="text-[11px] text-slate-400 font-mono truncate max-w-[120px]">
-            {product.barcode || '-'}
-          </span>
+        <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-1.5 mt-auto">
+          <button
+            type="button"
+            onClick={() => onToggleCompare && onToggleCompare(product)}
+            className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg border text-xs font-bold transition-all duration-150 active:scale-95 cursor-pointer ${
+              isCompared
+                ? 'bg-sky-600 text-white border-sky-600 shadow-xs'
+                : 'bg-slate-50 hover:bg-sky-50 text-slate-700 hover:text-sky-700 border-slate-200 hover:border-sky-300'
+            }`}
+            title={isCompared ? 'Hapus dari perbandingan' : 'Tambah ke perbandingan produk'}
+          >
+            <ArrowLeftRight className={`w-3.5 h-3.5 ${isCompared ? 'text-white' : 'text-slate-500'}`} />
+            <span>{isCompared ? 'Dibandingkan' : 'Bandingkan'}</span>
+          </button>
+
           <button
             onClick={() => onOpenDetail(product.item_code)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 hover:border-sky-500 hover:text-sky-700 hover:bg-sky-50/50 active:scale-95 text-slate-700 text-xs font-bold transition-all duration-150 shadow-2xs"
+            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-slate-200 hover:border-sky-500 hover:text-sky-700 hover:bg-sky-50/50 active:scale-95 text-slate-700 text-xs font-bold transition-all duration-150 shadow-2xs cursor-pointer"
           >
             <Eye className="w-3.5 h-3.5" />
-            <span>Detail 17 Kolom</span>
+            <span>Detail</span>
           </button>
         </div>
 

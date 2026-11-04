@@ -3,6 +3,8 @@ import Navbar from './components/Navbar';
 import FilterBar from './components/FilterBar';
 import ProductCard from './components/ProductCard';
 import ProductDetailModal from './components/ProductDetailModal';
+import ProductCompareModal from './components/ProductCompareModal';
+import CompareFloatingBar from './components/CompareFloatingBar';
 import StoreModal from './components/StoreModal';
 import AdminDashboard from './components/admin/AdminDashboard';
 import AdminLoginPage from './components/admin/AdminLoginPage';
@@ -37,6 +39,8 @@ export default function App() {
   const [isStoreModalOpen, setIsStoreModalOpen] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
+  const [comparedProducts, setComparedProducts] = useState([]);
+  const [isCompareModalOpen, setIsCompareModalOpen] = useState(false);
 
   // Sync hash with viewMode
   useEffect(() => {
@@ -162,6 +166,39 @@ export default function App() {
     }
   }
 
+  // Product Comparison Handlers
+  function handleToggleCompare(product) {
+    if (!product) return;
+    setComparedProducts(prev => {
+      const exists = prev.some(p => p.item_code === product.item_code);
+      if (exists) {
+        return prev.filter(p => p.item_code !== product.item_code);
+      } else {
+        if (prev.length >= 4) {
+          alert('Maksimal dapat membandingkan 4 produk sekaligus.');
+          return prev;
+        }
+        return [...prev, product];
+      }
+    });
+  }
+
+  function handleRemoveComparedProduct(itemCode) {
+    setComparedProducts(prev => prev.filter(p => p.item_code !== itemCode));
+  }
+
+  function handleClearCompare() {
+    setComparedProducts([]);
+  }
+
+  function handleOpenCompareModal() {
+    if (comparedProducts.length < 2) {
+      alert('Pilih minimal 2 produk untuk dibandingkan secara bersisian.');
+      return;
+    }
+    setIsCompareModalOpen(true);
+  }
+
   // Admin Auth
   function handleLoginSuccess(token) {
     setAdminToken(token);
@@ -212,6 +249,8 @@ export default function App() {
         syncing={syncing}
         onTriggerSync={handleTriggerSync}
         reportDate={reportDate}
+        comparedCount={comparedProducts.length}
+        onOpenCompare={handleOpenCompareModal}
       />
 
       {/* Main Container */}
@@ -285,12 +324,22 @@ export default function App() {
                 product={p}
                 currentStore={currentStore}
                 onOpenDetail={handleOpenDetail}
+                isCompared={comparedProducts.some(cp => cp.item_code === p.item_code)}
+                onToggleCompare={handleToggleCompare}
               />
             ))}
           </div>
         )}
 
       </main>
+
+      {/* Floating Compare Bar */}
+      <CompareFloatingBar
+        comparedProducts={comparedProducts}
+        onOpenCompare={handleOpenCompareModal}
+        onRemoveProduct={handleRemoveComparedProduct}
+        onClearAll={handleClearCompare}
+      />
 
       {/* Footer */}
       <footer className="mt-auto py-6 border-t border-slate-200 bg-white text-center text-xs text-slate-400">
@@ -321,6 +370,18 @@ export default function App() {
         onClose={() => setIsDetailOpen(false)}
         product={selectedProduct}
         currentStore={currentStore}
+        isCompared={selectedProduct && comparedProducts.some(cp => cp.item_code === selectedProduct.item_code)}
+        onToggleCompare={handleToggleCompare}
+      />
+
+      <ProductCompareModal
+        isOpen={isCompareModalOpen}
+        onClose={() => setIsCompareModalOpen(false)}
+        comparedProducts={comparedProducts}
+        onRemoveProduct={handleRemoveComparedProduct}
+        onClearAll={handleClearCompare}
+        currentStore={currentStore}
+        onOpenDetail={handleOpenDetail}
       />
 
     </div>
