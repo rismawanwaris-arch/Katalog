@@ -883,8 +883,9 @@ const server = http.createServer(async (req, res) => {
     headerRow.eachCell((cell, colNumber) => {
       const val = (cell.value || '').toString().toLowerCase().trim();
       if (val.includes('kode')) colMap.item_code = colNumber;
-      else if (val.includes('resmi') && val.includes('nama')) colMap.official_name = colNumber;
-      else if (val.includes('pos') || val.includes('erp') || (val.includes('nama') && !colMap.item_name && !val.includes('resmi'))) colMap.item_name = colNumber;
+      else if (val.includes('toko') || val.includes('marketplace') || val.includes('store') || val.includes('link')) colMap.official_store_url = colNumber;
+      else if ((val.includes('nama') && val.includes('official')) || (val.includes('nama') && val.includes('lengkap')) || (val.includes('resmi') && val.includes('nama')) || val.includes('nama produk')) colMap.official_name = colNumber;
+      else if (val.includes('pos') || val.includes('erp') || val.includes('nama item')) colMap.item_name = colNumber;
       else if (val.includes('alias')) colMap.item_alias = colNumber;
       else if (val.includes('barcode') || val.includes('ean')) colMap.barcode = colNumber;
       else if (val.includes('merk') || val.includes('brand')) colMap.brand = colNumber;
@@ -896,33 +897,33 @@ const server = http.createServer(async (req, res) => {
       else if (val.includes('kompatib') || val.includes('compatibility')) colMap.compatibility = colNumber;
       else if (val.includes('warna') || val.includes('color')) colMap.color = colNumber;
       else if (val.includes('gambar') || val.includes('image') || val.includes('foto')) colMap.image_url = colNumber;
-      else if (val.includes('toko') || val.includes('marketplace') || val.includes('store') || val.includes('link')) colMap.official_store_url = colNumber;
       else if (val.includes('status') || val.includes('kelengkapan')) colMap.status_data = colNumber;
     });
 
-    // Default column index fallbacks
-    if (!colMap.item_code) colMap.item_code = 1;
-    if (!colMap.official_name) colMap.official_name = 2;
+    // Default column index fallbacks (17-column format: 1:No, 2:Code, 3:POS Name, ..., 9:Official Name)
+    if (!colMap.item_code) colMap.item_code = 2;
+    if (!colMap.official_name) colMap.official_name = 9;
     if (!colMap.item_name) colMap.item_name = 3;
     if (!colMap.item_alias) colMap.item_alias = 4;
     if (!colMap.barcode) colMap.barcode = 5;
     if (!colMap.brand) colMap.brand = 6;
     if (!colMap.category) colMap.category = 7;
     if (!colMap.official_sku) colMap.official_sku = 8;
-    if (!colMap.main_spec) colMap.main_spec = 9;
-    if (!colMap.detail_spec) colMap.detail_spec = 10;
-    if (!colMap.interface) colMap.interface = 11;
-    if (!colMap.compatibility) colMap.compatibility = 12;
-    if (!colMap.color) colMap.color = 13;
-    if (!colMap.image_url) colMap.image_url = 14;
-    if (!colMap.official_store_url) colMap.official_store_url = 15;
-    if (!colMap.status_data) colMap.status_data = 16;
+    if (!colMap.main_spec) colMap.main_spec = 10;
+    if (!colMap.detail_spec) colMap.detail_spec = 11;
+    if (!colMap.interface) colMap.interface = 12;
+    if (!colMap.compatibility) colMap.compatibility = 13;
+    if (!colMap.color) colMap.color = 14;
+    if (!colMap.image_url) colMap.image_url = 15;
+    if (!colMap.official_store_url) colMap.official_store_url = 16;
+    if (!colMap.status_data) colMap.status_data = 17;
 
     function getCellText(row, colIndex) {
       if (!colIndex) return '';
       const cell = row.getCell(colIndex);
       if (!cell || cell.value === null || cell.value === undefined) return '';
       if (typeof cell.value === 'object') {
+        if (cell.value.hyperlink) return String(cell.value.hyperlink).trim();
         if (cell.value.text) return String(cell.value.text).trim();
         if (cell.value.result) return String(cell.value.result).trim();
         return String(cell.text || '').trim();
