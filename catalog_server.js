@@ -30,11 +30,41 @@ if (fs.existsSync(envPath)) {
 
 const PORT = parseInt(process.env.PORT, 10) || parseInt(process.env.CATALOG_PORT, 10) || 3600;
 const HOST = process.env.CATALOG_HOST || '0.0.0.0';
-const dbPath = process.env.CATALOG_DB_PATH || path.join(__dirname, 'catalog.db');
+let dbPath = process.env.CATALOG_DB_PATH || path.join(__dirname, 'catalog.db');
+// Safety guard: if Docker auto-created a directory because the file didn't exist yet on host
+if (fs.existsSync(dbPath) && fs.statSync(dbPath).isDirectory()) {
+  dbPath = path.join(dbPath, 'catalog.db');
+}
 const db = new DatabaseSync(dbPath);
 
 // Initialize settings table
 db.exec(`CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT);`);
+
+// Initialize products table
+db.exec(`
+  CREATE TABLE IF NOT EXISTS products (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    item_no INTEGER,
+    item_code TEXT UNIQUE NOT NULL,
+    item_name TEXT NOT NULL,
+    item_alias TEXT,
+    barcode TEXT,
+    brand TEXT NOT NULL,
+    category TEXT NOT NULL,
+    official_sku TEXT,
+    official_name TEXT NOT NULL,
+    main_spec TEXT,
+    detail_spec TEXT,
+    interface TEXT,
+    compatibility TEXT,
+    color TEXT,
+    image_url TEXT,
+    official_store_url TEXT,
+    status_data TEXT DEFAULT 'Lengkap',
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+`);
 
 // Initialize users table
 db.exec(`
