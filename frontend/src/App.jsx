@@ -29,6 +29,7 @@ export default function App() {
   const [stockFilter, setStockFilter] = useState('ALL'); // 'ALL' or 'READY'
   const [selectedBrand, setSelectedBrand] = useState('ALL');
   const [selectedCategory, setSelectedCategory] = useState('ALL');
+  const [sortBy, setSortBy] = useState('default'); // 'default', 'az', 'za', 'price_asc', 'price_desc', 'category'
   const [brands, setBrands] = useState([]);
   const [categories, setCategories] = useState([]);
 
@@ -88,6 +89,7 @@ export default function App() {
       if (selectedCategory && selectedCategory !== 'ALL') params.set('category', selectedCategory);
       if (currentStore) params.set('outlet', currentStore);
       if (stockFilter === 'READY') params.set('ready', 'true');
+      if (sortBy && sortBy !== 'default') params.set('sort', sortBy);
 
       const res = await fetch(`/api/products?${params.toString()}`);
       const data = await res.json();
@@ -104,7 +106,7 @@ export default function App() {
     } finally {
       setLoading(false);
     }
-  }, [searchQuery, selectedBrand, selectedCategory, currentStore, stockFilter, brands.length, categories.length]);
+  }, [searchQuery, selectedBrand, selectedCategory, currentStore, stockFilter, sortBy, brands.length, categories.length]);
 
   // Debounced search & filter trigger
   useEffect(() => {
@@ -143,6 +145,7 @@ export default function App() {
     setStockFilter('ALL');
     setSelectedBrand('ALL');
     setSelectedCategory('ALL');
+    setSortBy('default');
   }
 
   // Open Product Detail Modal
@@ -230,6 +233,8 @@ export default function App() {
           selectedCategory={selectedCategory}
           onCategoryChange={setSelectedCategory}
           categories={categories}
+          sortBy={sortBy}
+          onSortChange={setSortBy}
           totalItems={totalProducts}
           onResetFilters={handleResetFilters}
         />

@@ -451,6 +451,28 @@ const MIME_TYPES = {
   '.ico': 'image/x-icon'
 };
 
+function getSortOrderClause(sort) {
+  switch (sort) {
+    case 'az':
+    case 'name_asc':
+      return 'ORDER BY LOWER(official_name) ASC, LOWER(item_name) ASC';
+    case 'za':
+    case 'name_desc':
+      return 'ORDER BY LOWER(official_name) DESC, LOWER(item_name) DESC';
+    case 'price_asc':
+    case 'cheapest':
+      return 'ORDER BY (CASE WHEN price > 0 THEN 0 ELSE 1 END) ASC, price ASC, LOWER(official_name) ASC';
+    case 'price_desc':
+    case 'expensive':
+      return 'ORDER BY price DESC, LOWER(official_name) ASC';
+    case 'category':
+    case 'category_asc':
+      return 'ORDER BY LOWER(category) ASC, LOWER(official_name) ASC';
+    default:
+      return 'ORDER BY item_no ASC, id ASC';
+  }
+}
+
 const server = http.createServer(async (req, res) => {
   // CORS Headers
   if (req.method === 'OPTIONS') {
@@ -502,6 +524,7 @@ const server = http.createServer(async (req, res) => {
       const category = (parsedUrl.searchParams.get('category') || '').trim();
       const selectedOutlet = (parsedUrl.searchParams.get('outlet') || '').trim();
       const onlyReady = parsedUrl.searchParams.get('ready') === 'true';
+      const sort = (parsedUrl.searchParams.get('sort') || 'default').trim();
 
       let sql = 'SELECT * FROM products WHERE 1=1';
       const params = [];
@@ -531,7 +554,7 @@ const server = http.createServer(async (req, res) => {
         for (let i = 0; i < 8; i++) params.push(qPattern);
       }
 
-      sql += ' ORDER BY item_no ASC';
+      sql += ` ${getSortOrderClause(sort)}`;
 
       const stmt = db.prepare(sql);
       const rows = stmt.all(...params);
@@ -1229,6 +1252,7 @@ const server = http.createServer(async (req, res) => {
       const brand = parsedUrl.searchParams.get('brand') || '';
       const category = parsedUrl.searchParams.get('category') || '';
       const codesParam = parsedUrl.searchParams.get('codes') || '';
+      const sort = (parsedUrl.searchParams.get('sort') || 'default').trim();
 
       let sql = 'SELECT * FROM products WHERE 1=1';
       const params = [];
@@ -1256,7 +1280,7 @@ const server = http.createServer(async (req, res) => {
         }
       }
 
-      sql += ' ORDER BY item_no ASC, id ASC';
+      sql += ` ${getSortOrderClause(sort)}`;
       const rows = db.prepare(sql).all(...params);
 
       const workbook = new ExcelJS.Workbook();

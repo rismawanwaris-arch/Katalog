@@ -1,5 +1,5 @@
 import React from 'react';
-import { Search, X, Layers, CheckCircle2, RefreshCw, RotateCcw } from 'lucide-react';
+import { Search, X, Layers, CheckCircle2, RefreshCw, RotateCcw, ArrowUpDown } from 'lucide-react';
 
 export default function FilterBar({
   currentStore,
@@ -16,6 +16,8 @@ export default function FilterBar({
   selectedCategory,
   onCategoryChange,
   categories,
+  sortBy,
+  onSortChange,
   totalItems,
   onResetFilters
 }) {
@@ -140,6 +142,26 @@ export default function FilterBar({
               {categories.map(c => (
                 <option key={c} value={c}>{c}</option>
               ))}
+            </select>
+          </div>
+
+          {/* Sort By Filter */}
+          <div className="flex items-center gap-2 text-xs sm:text-sm">
+            <span className="font-semibold text-slate-500 flex items-center gap-1">
+              <ArrowUpDown className="w-3.5 h-3.5 text-slate-400" />
+              Urutkan:
+            </span>
+            <select
+              value={sortBy || 'default'}
+              onChange={e => onSortChange(e.target.value)}
+              className="px-3 py-1.5 rounded-lg border border-slate-200 bg-white font-medium text-slate-700 text-xs sm:text-sm focus:outline-none focus:border-sky-500"
+            >
+              <option value="default">Default (Urutan Item)</option>
+              <option value="az">Abjad A - Z</option>
+              <option value="za">Abjad Z - A</option>
+              <option value="price_asc">Harga Termurah</option>
+              <option value="price_desc">Harga Termahal</option>
+              <option value="category">Kategori (A - Z)</option>
             </select>
           </div>
         </div>

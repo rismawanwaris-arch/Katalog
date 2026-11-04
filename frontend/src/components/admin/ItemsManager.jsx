@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { 
   Search, Plus, Edit2, Trash2, X, Check, Eye, AlertCircle, RefreshCw, 
-  FileSpreadsheet, FileDown, Camera, Image
+  FileSpreadsheet, FileDown, Camera, Image, ArrowUpDown
 } from 'lucide-react';
 import { getProductImageSrc, getProductPlaceholderSrc, getBrandTheme, formatRupiah } from '../../utils/productUtils';
 import ImportExcelModal from './ImportExcelModal';
@@ -12,6 +12,7 @@ export default function ItemsManager({ adminToken, onStatsUpdated }) {
   const [search, setSearch] = useState('');
   const [selectedBrand, setSelectedBrand] = useState('ALL');
   const [selectedCategory, setSelectedCategory] = useState('ALL');
+  const [sortBy, setSortBy] = useState('default');
   const [brands, setBrands] = useState([]);
   const [categories, setCategories] = useState([]);
 
@@ -133,6 +134,7 @@ export default function ItemsManager({ adminToken, onStatsUpdated }) {
       if (search.trim()) params.set('q', search.trim());
       if (selectedBrand !== 'ALL') params.set('brand', selectedBrand);
       if (selectedCategory !== 'ALL') params.set('category', selectedCategory);
+      if (sortBy !== 'default') params.set('sort', sortBy);
 
       const res = await fetch(`/api/products?${params.toString()}`);
       const data = await res.json();
@@ -146,7 +148,7 @@ export default function ItemsManager({ adminToken, onStatsUpdated }) {
     } finally {
       setLoading(false);
     }
-  }, [search, selectedBrand, selectedCategory, brands.length, categories.length]);
+  }, [search, selectedBrand, selectedCategory, sortBy, brands.length, categories.length]);
 
   useEffect(() => {
     const timer = setTimeout(loadProducts, 250);
@@ -276,6 +278,7 @@ export default function ItemsManager({ adminToken, onStatsUpdated }) {
         if (search) params.append('q', search);
         if (selectedBrand && selectedBrand !== 'ALL') params.append('brand', selectedBrand);
         if (selectedCategory && selectedCategory !== 'ALL') params.append('category', selectedCategory);
+        if (sortBy && sortBy !== 'default') params.append('sort', sortBy);
       }
       url += params.toString();
 
@@ -456,6 +459,23 @@ export default function ItemsManager({ adminToken, onStatsUpdated }) {
             <option key={c} value={c}>{c}</option>
           ))}
         </select>
+
+        <div className="flex items-center gap-1.5 shrink-0">
+          <ArrowUpDown className="w-4 h-4 text-slate-400 hidden sm:inline" />
+          <select
+            value={sortBy}
+            onChange={e => setSortBy(e.target.value)}
+            className="px-3 py-2 rounded-xl border border-slate-200 text-xs sm:text-sm bg-white font-medium"
+            title="Urutkan Tampilan Item"
+          >
+            <option value="default">Urutkan: Default</option>
+            <option value="az">Abjad A - Z (Nama Resmi)</option>
+            <option value="za">Abjad Z - A</option>
+            <option value="price_asc">Harga Termurah</option>
+            <option value="price_desc">Harga Termahal</option>
+            <option value="category">Kategori (A - Z)</option>
+          </select>
+        </div>
 
         <button
           onClick={loadProducts}
