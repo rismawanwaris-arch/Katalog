@@ -958,13 +958,6 @@ const server = http.createServer(async (req, res) => {
       const barcode = getCellText(row, colMap.barcode);
       const brand = (getCellText(row, colMap.brand) || 'CAMPURAN').toUpperCase();
       const rawCategory = getCellText(row, colMap.category) || 'Aksesoris';
-      const category = normalizeProductCategory({
-        item_name,
-        official_name,
-        main_spec,
-        interface: iface,
-        category: rawCategory
-      });
       const official_sku = getCellText(row, colMap.official_sku) || item_code;
       const main_spec = getCellText(row, colMap.main_spec);
       const detail_spec = getCellText(row, colMap.detail_spec);
@@ -974,6 +967,14 @@ const server = http.createServer(async (req, res) => {
       const image_url = getCellText(row, colMap.image_url);
       const official_store_url = getCellText(row, colMap.official_store_url);
       const status_data = getCellText(row, colMap.status_data) || 'Lengkap';
+
+      const category = normalizeProductCategory({
+        item_name,
+        official_name,
+        main_spec,
+        interface: iface,
+        category: rawCategory
+      });
 
       items.push({
         rowNum: r,
