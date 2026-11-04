@@ -3,7 +3,7 @@ import {
   Search, Plus, Edit2, Trash2, X, Check, Eye, AlertCircle, RefreshCw, 
   FileSpreadsheet, FileDown, Camera, Image
 } from 'lucide-react';
-import { getProductImageSrc, getProductPlaceholderSrc, getBrandTheme } from '../../utils/productUtils';
+import { getProductImageSrc, getProductPlaceholderSrc, getBrandTheme, formatRupiah } from '../../utils/productUtils';
 import ImportExcelModal from './ImportExcelModal';
 
 export default function ItemsManager({ adminToken, onStatsUpdated }) {
@@ -120,6 +120,7 @@ export default function ItemsManager({ adminToken, onStatsUpdated }) {
       color: 'Black',
       image_url: '',
       official_store_url: '',
+      price: 0,
       status_data: 'Lengkap'
     };
   }
@@ -176,6 +177,7 @@ export default function ItemsManager({ adminToken, onStatsUpdated }) {
       color: product.color || '',
       image_url: product.image_url || '',
       official_store_url: product.official_store_url || '',
+      price: product.price || 0,
       status_data: product.status_data || 'Lengkap'
     });
     setModalMode('edit');
@@ -463,6 +465,7 @@ export default function ItemsManager({ adminToken, onStatsUpdated }) {
                 <th className="py-3 px-3">Kode / Barcode</th>
                 <th className="py-3 px-4">Nama Produk Resmi &amp; SKU</th>
                 <th className="py-3 px-3">Brand &amp; Kategori</th>
+                <th className="py-3 px-3 text-right">Harga (Rp)</th>
                 <th className="py-3 px-3 text-center">Stok Total</th>
                 <th className="py-3 px-4 text-right">Aksi</th>
               </tr>
@@ -470,7 +473,7 @@ export default function ItemsManager({ adminToken, onStatsUpdated }) {
             <tbody className="divide-y divide-slate-100">
               {loading ? (
                 <tr>
-                  <td colSpan="8" className="py-12 text-center text-slate-400">
+                  <td colSpan="9" className="py-12 text-center text-slate-400">
                     <div className="flex items-center justify-center gap-2">
                       <RefreshCw className="w-4 h-4 animate-spin text-sky-600" />
                       <span>Memuat data produk...</span>
@@ -479,7 +482,7 @@ export default function ItemsManager({ adminToken, onStatsUpdated }) {
                 </tr>
               ) : products.length === 0 ? (
                 <tr>
-                  <td colSpan="8" className="py-12 text-center text-slate-400">
+                  <td colSpan="9" className="py-12 text-center text-slate-400">
                     Tidak ada produk yang cocok dengan pencarian / filter Anda.
                   </td>
                 </tr>
@@ -569,6 +572,11 @@ export default function ItemsManager({ adminToken, onStatsUpdated }) {
                         <span className="text-[11px] text-slate-500 block truncate max-w-[140px]">
                           {p.category}
                         </span>
+                      </td>
+
+                      {/* Price */}
+                      <td className="py-3 px-3 text-right font-mono font-bold text-emerald-700 whitespace-nowrap">
+                        {p.price > 0 ? formatRupiah(p.price) : <span className="text-slate-300 font-normal">-</span>}
                       </td>
 
                       {/* Total Stock */}
@@ -932,6 +940,27 @@ export default function ItemsManager({ adminToken, onStatsUpdated }) {
                   placeholder="https://tokopedia.com/..."
                   className="w-full px-3 py-2 rounded-lg border border-slate-200"
                 />
+              </div>
+
+              <div className="p-3.5 bg-emerald-50/60 rounded-xl border border-emerald-200">
+                <label className="block font-bold text-emerald-950 mb-1 text-xs sm:text-sm">
+                  16. Harga Jual Retail (Rp)
+                </label>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-emerald-700 text-xs">
+                    Rp
+                  </span>
+                  <input
+                    type="number"
+                    value={formData.price || ''}
+                    onChange={e => setFormData({ ...formData, price: parseInt(e.target.value, 10) || 0 })}
+                    placeholder="Contoh: 35000 (Kosongkan jika belum ada harga)"
+                    className="w-full pl-9 pr-3 py-2 rounded-lg border border-emerald-300 bg-white font-mono font-bold text-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 text-sm"
+                  />
+                </div>
+                <p className="text-[10px] text-emerald-700/80 mt-1">
+                  Harga akan ditampilkan langsung di kartu produk pada halaman depan kasir
+                </p>
               </div>
 
               <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">

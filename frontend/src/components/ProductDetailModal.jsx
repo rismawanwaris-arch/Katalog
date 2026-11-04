@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { X, ExternalLink, CheckCircle2, AlertCircle, Store, ShieldCheck } from 'lucide-react';
-import { getProductImageSrc, getProductPlaceholderSrc, getBrandTheme } from '../utils/productUtils';
+import { getProductImageSrc, getProductPlaceholderSrc, getBrandTheme, formatRupiah } from '../utils/productUtils';
 
 export default function ProductDetailModal({ isOpen, onClose, product, currentStore }) {
   const [imgError, setImgError] = useState(false);
@@ -41,7 +41,8 @@ export default function ProductDetailModal({ isOpen, onClose, product, currentSt
         </a>
       ) : '-'
     },
-    { label: '16. Status Data', value: product.status_data || 'Lengkap' }
+    { label: '16. Harga Jual Retail', value: product.price > 0 ? formatRupiah(product.price) : 'Hubungi Toko' },
+    { label: '17. Status Data', value: product.status_data || 'Lengkap' }
   ];
 
   return (
@@ -65,9 +66,14 @@ export default function ProductDetailModal({ isOpen, onClose, product, currentSt
             <h2 className="text-base sm:text-xl font-bold text-slate-900 leading-snug">
               {product.official_name}
             </h2>
-            <p className="text-xs text-slate-500 font-mono mt-0.5">
-              SKU: {product.official_sku || '-'} | Kode ERP: {product.item_code} | Barcode: {product.barcode || '-'}
-            </p>
+            <div className="flex items-center gap-3 mt-1.5 flex-wrap">
+              <span className="text-lg sm:text-xl font-black text-emerald-700 bg-emerald-50 px-3 py-0.5 rounded-lg border border-emerald-200">
+                {product.price > 0 ? formatRupiah(product.price) : 'Hubungi Toko'}
+              </span>
+              <p className="text-xs text-slate-500 font-mono">
+                SKU: {product.official_sku || '-'} | Kode ERP: {product.item_code} | Barcode: {product.barcode || '-'}
+              </p>
+            </div>
           </div>
 
           <button

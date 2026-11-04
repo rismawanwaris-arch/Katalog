@@ -60,11 +60,24 @@ db.exec(`
     color TEXT,
     image_url TEXT,
     official_store_url TEXT,
+    price INTEGER DEFAULT 0,
     status_data TEXT DEFAULT 'Lengkap',
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
   );
 `);
+
+// Auto-migrate price column if missing in existing database
+try {
+  const pragma = db.prepare('PRAGMA table_info(products)').all();
+  const hasPrice = pragma.some(c => c.name === 'price');
+  if (!hasPrice) {
+    db.exec('ALTER TABLE products ADD COLUMN price INTEGER DEFAULT 0;');
+    console.log('[Database] Kolom "price" berhasil ditambahkan ke tabel products.');
+  }
+} catch (e) {
+  console.error('[Database] Error checking/adding price column:', e.message);
+}
 
 // Initialize users table
 db.exec(`
@@ -698,16 +711,18 @@ const server = http.createServer(async (req, res) => {
           item_no, item_code, item_name, item_alias, barcode,
           brand, category, official_sku, official_name,
           main_spec, detail_spec, interface, compatibility,
-          color, image_url, official_store_url, status_data,
+          color, image_url, official_store_url, price, status_data,
           created_at, updated_at
         ) VALUES (
           ?, ?, ?, ?, ?,
           ?, ?, ?, ?,
           ?, ?, ?, ?,
-          ?, ?, ?, ?,
+          ?, ?, ?, ?, ?,
           ?, ?
         )
       `);
+
+      const priceVal = parseInt(b.price, 10) || 0;
 
       stmt.run(
         nextNo,
@@ -726,6 +741,7 @@ const server = http.createServer(async (req, res) => {
         b.color || '',
         b.image_url || '',
         b.official_store_url || '',
+        priceVal,
         b.status_data || 'Lengkap',
         now,
         now
@@ -753,13 +769,14 @@ const server = http.createServer(async (req, res) => {
       const code = decodeURIComponent(pathname.replace('/api/products/', ''));
       const b = await parseJsonBody(req);
       const now = new Date().toISOString();
+      const priceVal = parseInt(b.price, 10) || 0;
 
       const stmt = db.prepare(`
         UPDATE products SET
           item_name = ?, item_alias = ?, barcode = ?,
           brand = ?, category = ?, official_sku = ?, official_name = ?,
           main_spec = ?, detail_spec = ?, interface = ?, compatibility = ?,
-          color = ?, image_url = ?, official_store_url = ?, status_data = ?,
+          color = ?, image_url = ?, official_store_url = ?, price = ?, status_data = ?,
           updated_at = ?
         WHERE item_code = ?
       `);
@@ -768,7 +785,7 @@ const server = http.createServer(async (req, res) => {
         b.item_name, b.item_alias, b.barcode,
         b.brand, b.category, b.official_sku, b.official_name,
         b.main_spec, b.detail_spec, b.interface, b.compatibility,
-        b.color, b.image_url, b.official_store_url, b.status_data,
+        b.color, b.image_url, b.official_store_url, priceVal, b.status_data,
         now,
         code
       );
@@ -927,6 +944,7 @@ const server = http.createServer(async (req, res) => {
       else if (val.includes('kompatib') || val.includes('compatibility')) colMap.compatibility = colNumber;
       else if (val.includes('warna') || val.includes('color')) colMap.color = colNumber;
       else if (val.includes('gambar') || val.includes('image') || val.includes('foto')) colMap.image_url = colNumber;
+      else if (val.includes('harga') || val.includes('price') || val.includes('tarif')) colMap.price = colNumber;
       else if (val.includes('status') || val.includes('kelengkapan')) colMap.status_data = colNumber;
     });
 
@@ -998,6 +1016,11 @@ const server = http.createServer(async (req, res) => {
       const image_url = getCellText(row, colMap.image_url);
       const official_store_url = getCellText(row, colMap.official_store_url);
       const status_data = getCellText(row, colMap.status_data) || 'Lengkap';
+      const rawPrice = colMap.price ? getCellText(row, colMap.price) : '';
+      let price = 0;
+      if (rawPrice) {
+        price = parseInt(String(rawPrice).replace(/[^0-9]/g, ''), 10) || 0;
+      }
 
       const category = normalizeProductCategory({
         item_name,
@@ -1024,6 +1047,7 @@ const server = http.createServer(async (req, res) => {
         color,
         image_url,
         official_store_url,
+        price,
         status_data
       });
     }
@@ -1064,6 +1088,7 @@ const server = http.createServer(async (req, res) => {
         { header: 'Warna', key: 'color', width: 15 },
         { header: 'URL Gambar Produk', key: 'image_url', width: 35 },
         { header: 'Link Toko / Marketplace', key: 'official_store_url', width: 35 },
+        { header: 'Harga Jual (Rp)', key: 'price', width: 18 },
         { header: 'Status Kelengkapan Data', key: 'status_data', width: 22 }
       ];
 
@@ -1283,13 +1308,13 @@ const server = http.createServer(async (req, res) => {
             item_no, item_code, item_name, item_alias, barcode,
             brand, category, official_sku, official_name,
             main_spec, detail_spec, interface, compatibility,
-            color, image_url, official_store_url, status_data,
+            color, image_url, official_store_url, price, status_data,
             created_at, updated_at
           ) VALUES (
             ?, ?, ?, ?, ?,
             ?, ?, ?, ?,
             ?, ?, ?, ?,
-            ?, ?, ?, ?,
+            ?, ?, ?, ?, ?,
             ?, ?
           )
         `);
@@ -1299,20 +1324,21 @@ const server = http.createServer(async (req, res) => {
             item_name = ?, item_alias = ?, barcode = ?,
             brand = ?, category = ?, official_sku = ?, official_name = ?,
             main_spec = ?, detail_spec = ?, interface = ?, compatibility = ?,
-            color = ?, image_url = ?, official_store_url = ?, status_data = ?,
+            color = ?, image_url = ?, official_store_url = ?, price = ?, status_data = ?,
             updated_at = ?
           WHERE item_code = ?
         `);
 
         for (const item of items) {
           const existing = checkStmt.get(item.item_code);
+          const priceVal = parseInt(item.price, 10) || 0;
           if (existing) {
             if (updateExisting) {
               updateStmt.run(
                 item.item_name, item.item_alias, item.barcode,
                 item.brand, item.category, item.official_sku, item.official_name,
                 item.main_spec, item.detail_spec, item.interface, item.compatibility,
-                item.color, item.image_url, item.official_store_url, item.status_data,
+                item.color, item.image_url, item.official_store_url, priceVal, item.status_data,
                 now,
                 item.item_code
               );
@@ -1326,7 +1352,7 @@ const server = http.createServer(async (req, res) => {
               item.item_code, item.item_name, item.item_alias, item.barcode,
               item.brand, item.category, item.official_sku, item.official_name,
               item.main_spec, item.detail_spec, item.interface, item.compatibility,
-              item.color, item.image_url, item.official_store_url, item.status_data,
+              item.color, item.image_url, item.official_store_url, priceVal, item.status_data,
               now, now
             );
             inserted++;

@@ -26,6 +26,7 @@ db.exec(`
     color TEXT,
     image_url TEXT,
     official_store_url TEXT,
+    price INTEGER DEFAULT 0,
     status_data TEXT DEFAULT 'Lengkap',
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
@@ -155,13 +156,13 @@ if (fs.existsSync(parsedPath)) {
       item_no, item_code, item_name, item_alias, barcode,
       brand, category, official_sku, official_name,
       main_spec, detail_spec, interface, compatibility,
-      color, image_url, official_store_url, status_data,
+      color, image_url, official_store_url, price, status_data,
       created_at, updated_at
     ) VALUES (
       ?, ?, ?, ?, ?,
       ?, ?, ?, ?,
       ?, ?, ?, ?,
-      ?, ?, ?, ?,
+      ?, ?, ?, ?, ?,
       ?, ?
     )
   `);
@@ -195,6 +196,7 @@ if (fs.existsSync(parsedPath)) {
         d.color || 'Standar',
         d.imageUrl || '',
         d.officialUrl || '',
+        d.price || 0,
         d.statusData || 'Lengkap',
         now,
         now

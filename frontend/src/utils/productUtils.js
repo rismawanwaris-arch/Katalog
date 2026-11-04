@@ -75,3 +75,16 @@ export function getProductImageSrc(product) {
   }
   return getProductPlaceholderSrc(product.brand, product.category, product.item_code);
 }
+
+// Format Rupiah Currency
+export function formatRupiah(amount) {
+  if (!amount || isNaN(amount) || amount <= 0) {
+    return 'Rp -';
+  }
+  return new Intl.NumberFormat('id-ID', {
+    style: 'currency',
+    currency: 'IDR',
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0
+  }).format(amount);
+}

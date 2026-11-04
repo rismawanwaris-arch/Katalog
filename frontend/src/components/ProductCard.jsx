@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { CheckCircle2, AlertCircle, Info, Eye } from 'lucide-react';
-import { getProductImageSrc, getProductPlaceholderSrc, getBrandTheme } from '../utils/productUtils';
+import { getProductImageSrc, getProductPlaceholderSrc, getBrandTheme, formatRupiah } from '../utils/productUtils';
 
 function LazyProductImage({ src, fallbackUrl, alt }) {
   const [inView, setInView] = useState(false);
@@ -100,9 +100,19 @@ export default function ProductCard({ product, currentStore, onOpenDetail }) {
           </h3>
 
           {/* Code & SKU */}
-          <div className="flex items-center justify-between text-[11px] text-slate-500 mb-3 bg-slate-50 px-2.5 py-1.5 rounded-lg border border-slate-100">
+          <div className="flex items-center justify-between text-[11px] text-slate-500 mb-2.5 bg-slate-50 px-2.5 py-1.5 rounded-lg border border-slate-100">
             <span>Kode: <strong className="text-slate-800">{product.item_code}</strong></span>
             <span>SKU: <strong className="text-slate-800 truncate max-w-[100px] inline-block align-bottom">{product.official_sku || '-'}</strong></span>
+          </div>
+
+          {/* Price Tag */}
+          <div className="mb-3 flex items-baseline justify-between bg-emerald-50/50 px-2.5 py-1.5 rounded-lg border border-emerald-100">
+            <span className="text-sm sm:text-base font-black text-emerald-700 tracking-tight">
+              {product.price > 0 ? formatRupiah(product.price) : 'Hubungi Toko'}
+            </span>
+            <span className="text-[10px] text-emerald-800/70 font-semibold uppercase tracking-wider">
+              {product.price > 0 ? 'Harga Retail' : 'Belum Ada Harga'}
+            </span>
           </div>
 
           {/* Current Store Stock Indicator */}
