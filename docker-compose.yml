@@ -1,0 +1,18 @@
+version: '3.8'
+
+services:
+  katalog-aksesoris:
+    build: .
+    container_name: katalog-aksesoris-app
+    restart: unless-stopped
+    ports:
+      # Port 3600 aman & belum dipakai di ZimaOS
+      - "3600:3600"
+    environment:
+      - PORT=3600
+      - CATALOG_HOST=0.0.0.0
+      - STOCK_API_URL=http://100.86.129.52:3500
+    volumes:
+      # Persistent storage agar database & foto produk tidak hilang saat server restart
+      - ./catalog.db:/app/catalog.db
+      - ./public/images/products:/app/public/images/products

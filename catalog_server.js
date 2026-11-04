@@ -28,9 +28,9 @@ if (fs.existsSync(envPath)) {
   });
 }
 
-const PORT = parseInt(process.env.CATALOG_PORT, 10) || 3600;
+const PORT = parseInt(process.env.PORT, 10) || parseInt(process.env.CATALOG_PORT, 10) || 3600;
 const HOST = process.env.CATALOG_HOST || '0.0.0.0';
-const dbPath = path.join(__dirname, 'catalog.db');
+const dbPath = process.env.CATALOG_DB_PATH || path.join(__dirname, 'catalog.db');
 const db = new DatabaseSync(dbPath);
 
 // Initialize settings table
