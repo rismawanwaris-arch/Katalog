@@ -1,9 +1,59 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { CheckCircle2, AlertCircle, Info, Eye } from 'lucide-react';
 import { getProductImageSrc, getProductPlaceholderSrc, getBrandTheme } from '../utils/productUtils';
 
+function LazyProductImage({ src, fallbackUrl, alt }) {
+  const [inView, setInView] = useState(false);
+  const [hasError, setHasError] = useState(false);
+  const [isLoaded, setIsLoaded] = useState(false);
+  const containerRef = useRef(null);
+
+  useEffect(() => {
+    if (!('IntersectionObserver' in window)) {
+      setInView(true);
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            setInView(true);
+            observer.disconnect();
+          }
+        });
+      },
+      { rootMargin: '150px' } // Load 150px before scrolled into view
+    );
+
+    if (containerRef.current) {
+      observer.observe(containerRef.current);
+    }
+
+    return () => observer.disconnect();
+  }, [src]);
+
+  const isDataUri = src && src.startsWith('data:');
+  const shouldLoadActual = inView || isDataUri;
+  const currentSrc = hasError ? fallbackUrl : (shouldLoadActual ? src : fallbackUrl);
+
+  return (
+    <div ref={containerRef} className="w-full h-full flex items-center justify-center">
+      <img
+        src={currentSrc}
+        alt={alt}
+        loading="lazy"
+        onLoad={() => setIsLoaded(true)}
+        onError={() => setHasError(true)}
+        className={`w-full h-full object-contain transition-all duration-300 group-hover:scale-105 ${
+          !isLoaded && shouldLoadActual && !isDataUri ? 'opacity-70 blur-[1px]' : 'opacity-100 blur-0'
+        }`}
+      />
+    </div>
+  );
+}
+
 export default function ProductCard({ product, currentStore, onOpenDetail }) {
-  const [imgError, setImgError] = useState(false);
   const theme = getBrandTheme(product.brand);
 
   const fallbackUrl = getProductPlaceholderSrc(
@@ -12,10 +62,10 @@ export default function ProductCard({ product, currentStore, onOpenDetail }) {
     product.item_code
   );
 
-  const imgSrc = imgError ? fallbackUrl : getProductImageSrc(product);
+  const rawSrc = getProductImageSrc(product);
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm hover:shadow-md hover:border-sky-300 transition-all flex flex-col overflow-hidden group">
+    <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs hover:shadow-lg hover:shadow-slate-200/70 hover:border-sky-300 hover:-translate-y-1 transition-all duration-200 ease-out flex flex-col overflow-hidden group will-change-transform">
       
       {/* Image Container with Badges */}
       <div className="relative aspect-[4/3] bg-slate-50 flex items-center justify-center p-3 overflow-hidden border-b border-slate-100">
@@ -30,13 +80,11 @@ export default function ProductCard({ product, currentStore, onOpenDetail }) {
           </span>
         </div>
 
-        {/* Product Image */}
-        <img
-          src={imgSrc}
+        {/* On-Demand Lazy Loaded & Cached Product Image */}
+        <LazyProductImage
+          src={rawSrc}
+          fallbackUrl={fallbackUrl}
           alt={product.official_name}
-          loading="lazy"
-          onError={() => setImgError(true)}
-          className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-300"
         />
       </div>
 
@@ -57,40 +105,46 @@ export default function ProductCard({ product, currentStore, onOpenDetail }) {
             <span>SKU: <strong className="text-slate-800 truncate max-w-[100px] inline-block align-bottom">{product.official_sku || '-'}</strong></span>
           </div>
 
-          {/* Real-time Stock Badge */}
+          {/* Current Store Stock Indicator */}
           {currentStore ? (
             product.outletStock > 0 ? (
               <div className="flex items-center gap-2 p-2.5 rounded-xl bg-emerald-50 text-emerald-800 border border-emerald-200 text-xs font-semibold mb-3">
                 <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                <span>Tersedia di Toko Anda: <strong>{product.outletStock} Pcs</strong></span>
+                <span>
+                  Tersedia di Toko Anda: <strong>{product.outletStock} Pcs</strong>
+                </span>
               </div>
             ) : (
               <div className="flex items-center gap-2 p-2.5 rounded-xl bg-rose-50 text-rose-700 border border-rose-200 text-xs font-semibold mb-3">
                 <AlertCircle className="w-4 h-4 text-rose-500 shrink-0" />
-                <span>Stok Toko: <strong>Kosong (0 Pcs)</strong></span>
+                <span>
+                  Stok Toko: <strong>Kosong (0 Pcs)</strong>
+                </span>
               </div>
             )
           ) : (
-            <div className="flex items-center gap-2 p-2.5 rounded-xl bg-slate-100 text-slate-700 border border-slate-200 text-xs font-medium mb-3">
+            <div className="flex items-center gap-2 p-2.5 rounded-xl bg-slate-100 text-slate-700 border border-slate-200 text-xs font-semibold mb-3">
               <Info className="w-4 h-4 text-slate-500 shrink-0" />
-              <span>Total Jaringan: <strong>{product.totalNetworkStock || 0} Pcs</strong></span>
+              <span>
+                Total Jaringan: <strong>{product.totalNetworkStock || 0} Pcs</strong>
+              </span>
             </div>
           )}
 
-          {/* Main Specification Highlight */}
+          {/* Quick Spec Snippet */}
           <div className="text-xs text-slate-600 line-clamp-2 mb-4 bg-sky-50/40 p-2 rounded-lg border border-sky-100/60">
             <strong className="text-sky-900">Spesifikasi:</strong> {product.main_spec || '-'}
           </div>
         </div>
 
-        {/* Card Footer: Barcode & Detail Button */}
+        {/* Footer Actions */}
         <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-2 mt-auto">
           <span className="text-[11px] text-slate-400 font-mono truncate max-w-[120px]">
             {product.barcode || '-'}
           </span>
           <button
             onClick={() => onOpenDetail(product.item_code)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 hover:border-sky-500 hover:text-sky-700 text-slate-700 text-xs font-bold transition shadow-2xs"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 hover:border-sky-500 hover:text-sky-700 hover:bg-sky-50/50 active:scale-95 text-slate-700 text-xs font-bold transition-all duration-150 shadow-2xs"
           >
             <Eye className="w-3.5 h-3.5" />
             <span>Detail 17 Kolom</span>

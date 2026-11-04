@@ -43,3 +43,7 @@ Thumbs.db
 *.tmp
 test_template.xlsx
 test_katalog_upload.xlsx
+
+# Uploaded product images
+public/images/products/*
+!public/images/products/.gitkeep

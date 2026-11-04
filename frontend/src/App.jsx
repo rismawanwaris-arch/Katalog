@@ -236,11 +236,21 @@ export default function App() {
 
         {/* Product Grid Area */}
         {loading ? (
-          <div className="flex flex-col items-center justify-center py-20 bg-white rounded-2xl border border-slate-200/80 p-8 text-center">
-            <Loader2 className="w-10 h-10 text-sky-600 animate-spin mb-4" />
-            <p className="text-slate-600 font-semibold text-sm">
-              Memuat katalog produk &amp; mencocokkan stok cabang {currentStore ? `"${currentStore}"` : ''}...
-            </p>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
+            {[...Array(8)].map((_, i) => (
+              <div key={i} className="bg-white rounded-2xl border border-slate-200/80 p-3 sm:p-4 flex flex-col justify-between animate-pulse">
+                <div>
+                  <div className="w-full aspect-square bg-slate-200/70 rounded-xl mb-3" />
+                  <div className="h-4 bg-slate-200/80 rounded w-1/3 mb-2" />
+                  <div className="h-4 bg-slate-200/80 rounded w-5/6 mb-1.5" />
+                  <div className="h-3 bg-slate-100 rounded w-1/2 mb-4" />
+                </div>
+                <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
+                  <div className="h-5 bg-slate-200/80 rounded w-2/5" />
+                  <div className="h-7 bg-slate-200/80 rounded-lg w-1/3" />
+                </div>
+              </div>
+            ))}
           </div>
         ) : products.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 bg-white rounded-2xl border border-slate-200/80 p-8 text-center">

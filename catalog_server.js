@@ -299,6 +299,8 @@ const MIME_TYPES = {
   '.png': 'image/png',
   '.jpg': 'image/jpeg',
   '.jpeg': 'image/jpeg',
+  '.webp': 'image/webp',
+  '.gif': 'image/gif',
   '.svg': 'image/svg+xml',
   '.ico': 'image/x-icon'
 };
@@ -668,6 +670,67 @@ const server = http.createServer(async (req, res) => {
       });
     } catch (err) {
       return sendJson(req, res, 500, { success: false, message: err.message });
+    }
+  }
+
+  // POST /api/admin/upload-image (Direct photo upload for product)
+  if (req.method === 'POST' && pathname === '/api/admin/upload-image') {
+    try {
+      const auth = req.headers['authorization'] || '';
+      if (!auth.includes('auth-token-admin')) {
+        return sendJson(req, res, 403, { success: false, message: 'Akses ditolak. Silakan login sebagai Admin.' });
+      }
+
+      const body = await parseJsonBody(req);
+      const { imageBase64, fileName, itemCode } = body;
+
+      if (!imageBase64) {
+        return sendJson(req, res, 400, { success: false, message: 'File gambar (base64) wajib disertakan!' });
+      }
+
+      // Determine extension
+      let ext = '.jpg';
+      if (imageBase64.startsWith('data:image/png')) ext = '.png';
+      else if (imageBase64.startsWith('data:image/webp')) ext = '.webp';
+      else if (imageBase64.startsWith('data:image/gif')) ext = '.gif';
+      else if (fileName) {
+        const fileExt = path.extname(fileName).toLowerCase();
+        if (['.jpg', '.jpeg', '.png', '.webp', '.gif'].includes(fileExt)) {
+          ext = fileExt === '.jpeg' ? '.jpg' : fileExt;
+        }
+      }
+
+      const uploadDir = path.join(__dirname, 'public', 'images', 'products');
+      if (!fs.existsSync(uploadDir)) {
+        fs.mkdirSync(uploadDir, { recursive: true });
+      }
+
+      const cleanCode = (itemCode || 'prod').replace(/[^a-zA-Z0-9_-]/g, '');
+      const uniqueFileName = `${cleanCode}_${Date.now()}${ext}`;
+      const destPath = path.join(uploadDir, uniqueFileName);
+
+      const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, '');
+      const buffer = Buffer.from(base64Data, 'base64');
+
+      fs.writeFileSync(destPath, buffer);
+
+      const publicImageUrl = `/images/products/${uniqueFileName}`;
+
+      // If itemCode was provided and product exists in database, auto-update image_url
+      if (itemCode) {
+        const now = new Date().toISOString();
+        db.prepare('UPDATE products SET image_url = ?, updated_at = ? WHERE item_code = ?').run(publicImageUrl, now, itemCode);
+        logActivity('admin', 'Administrator Utama', 'IMAGE_UPLOAD', 'CATALOG', `Mengunggah foto produk langsung untuk [${itemCode}]`, { itemCode, file: uniqueFileName }, req);
+      }
+
+      return sendJson(req, res, 200, {
+        success: true,
+        imageUrl: publicImageUrl,
+        message: 'Foto berhasil diunggah dan disimpan ke server!'
+      });
+    } catch (err) {
+      console.error('Error uploading image:', err);
+      return sendJson(req, res, 500, { success: false, message: 'Gagal mengunggah foto: ' + err.message });
     }
   }
 
@@ -1711,12 +1774,37 @@ const server = http.createServer(async (req, res) => {
   try {
     const ext = path.extname(filePath).toLowerCase();
     const contentType = MIME_TYPES[ext] || 'application/octet-stream';
+    const stat = fs.statSync(filePath);
+
+    // ETag and Last-Modified for intelligent browser caching
+    const etag = `W/"${stat.size}-${stat.mtime.getTime()}"`;
+    const lastModified = stat.mtime.toUTCString();
+
+    const clientEtag = req.headers['if-none-match'];
+    const clientModified = req.headers['if-modified-since'];
+
+    // Long-term caching for static images and bundled assets (30 days)
+    const isCacheable = pathname.startsWith('/images/') || pathname.startsWith('/assets/');
+    const cacheControl = isCacheable ? 'public, max-age=2592000, immutable' : 'no-cache';
+
+    // Return 304 Not Modified if browser already has the latest file
+    if ((clientEtag && clientEtag === etag) || (clientModified && clientModified === lastModified)) {
+      res.writeHead(304, {
+        'ETag': etag,
+        'Last-Modified': lastModified,
+        'Cache-Control': cacheControl
+      });
+      return res.end();
+    }
+
     const content = fs.readFileSync(filePath);
 
     res.writeHead(200, {
       'Content-Type': contentType,
       'Content-Length': content.length,
-      'Cache-Control': 'no-cache'
+      'Cache-Control': cacheControl,
+      'ETag': etag,
+      'Last-Modified': lastModified
     });
     res.end(content);
   } catch (err) {

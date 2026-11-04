@@ -36,7 +36,7 @@ export default function Navbar({
             {/* Store Badge Button */}
             <button
               onClick={onOpenStoreModal}
-              className={`flex items-center gap-2 px-3 py-1.5 sm:px-4 sm:py-2 rounded-full border text-xs sm:text-sm font-medium transition-all shadow-sm ${
+              className={`flex items-center gap-2 px-3 py-1.5 sm:px-4 sm:py-2 rounded-full border text-xs sm:text-sm font-medium transition-all duration-150 active:scale-95 shadow-sm ${
                 currentStore
                   ? 'bg-sky-50/90 border-sky-300 text-sky-900 hover:bg-sky-100 hover:border-sky-400'
                   : 'bg-amber-50 border-amber-300 text-amber-900 hover:bg-amber-100 animate-pulse'
@@ -57,7 +57,7 @@ export default function Navbar({
             {/* Admin Portal Button */}
             <button
               onClick={onGoToAdmin}
-              className={`flex items-center gap-1.5 px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl border text-xs sm:text-sm font-bold transition shadow-xs ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl border text-xs sm:text-sm font-bold transition-all duration-150 active:scale-95 shadow-xs ${
                 adminToken
                   ? 'bg-sky-50 border-sky-300 text-sky-900 hover:bg-sky-100'
                   : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-100'

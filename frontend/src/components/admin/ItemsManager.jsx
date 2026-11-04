@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { 
   Search, Plus, Edit2, Trash2, X, Check, Eye, AlertCircle, RefreshCw, 
-  FileSpreadsheet, FileDown 
+  FileSpreadsheet, FileDown, Camera, Image
 } from 'lucide-react';
 import { getProductImageSrc, getProductPlaceholderSrc, getBrandTheme } from '../../utils/productUtils';
 import ImportExcelModal from './ImportExcelModal';
@@ -22,6 +22,10 @@ export default function ItemsManager({ adminToken, onStatsUpdated }) {
   const [formData, setFormData] = useState(getInitialForm());
   const [formLoading, setFormLoading] = useState(false);
   const [formError, setFormError] = useState('');
+
+  // Image Upload State
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [imageUploadError, setImageUploadError] = useState('');
 
   // Import Excel State
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
@@ -189,6 +193,62 @@ export default function ItemsManager({ adminToken, onStatsUpdated }) {
     }
   }
 
+  async function handleFileUpload(file, targetItemCode = null) {
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      alert('File harus berupa gambar (JPG, PNG, WebP, GIF)');
+      return;
+    }
+
+    if (file.size > 10 * 1024 * 1024) {
+      alert('Ukuran file maksimal 10MB');
+      return;
+    }
+
+    setUploadingImage(true);
+    setImageUploadError('');
+
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      try {
+        const base64 = e.target.result;
+        const code = targetItemCode || formData.item_code;
+        const res = await fetch('/api/admin/upload-image', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': adminToken
+          },
+          body: JSON.stringify({
+            imageBase64: base64,
+            fileName: file.name,
+            itemCode: code
+          })
+        });
+        const data = await res.json();
+        if (data.success) {
+          if (targetItemCode) {
+            // Quick upload from table: update product in list directly!
+            setProducts(prev => prev.map(p => p.item_code === targetItemCode ? { ...p, image_url: data.imageUrl } : p));
+            alert('Foto produk berhasil diperbarui!');
+          } else {
+            // In modal form: set formData.image_url
+            setFormData(prev => ({ ...prev, image_url: data.imageUrl }));
+          }
+        } else {
+          setImageUploadError(data.message || 'Gagal mengunggah foto');
+          alert(data.message || 'Gagal mengunggah foto');
+        }
+      } catch (err) {
+        setImageUploadError('Kesalahan jaringan: ' + err.message);
+        alert('Kesalahan jaringan saat mengunggah foto: ' + err.message);
+      } finally {
+        setUploadingImage(false);
+      }
+    };
+    reader.readAsDataURL(file);
+  }
+
   return (
     <div className="space-y-6">
       
@@ -327,9 +387,9 @@ export default function ItemsManager({ adminToken, onStatsUpdated }) {
                         {p.item_no || idx + 1}
                       </td>
 
-                      {/* Image Thumbnail */}
+                      {/* Image Thumbnail with Direct Quick Upload */}
                       <td className="py-2.5 px-3">
-                        <div className="w-11 h-11 rounded-lg bg-slate-100 border border-slate-200 overflow-hidden flex items-center justify-center p-0.5">
+                        <div className="relative group w-12 h-12 rounded-xl bg-slate-100 border border-slate-200 overflow-hidden flex items-center justify-center p-0.5 shadow-2xs">
                           <img
                             src={imgSrc}
                             alt={p.official_name}
@@ -339,6 +399,23 @@ export default function ItemsManager({ adminToken, onStatsUpdated }) {
                               e.target.src = getProductPlaceholderSrc(p.brand, p.category, p.item_code);
                             }}
                           />
+                          <label 
+                            className="absolute inset-0 bg-slate-900/75 text-white opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center cursor-pointer transition-opacity text-[9px] font-bold text-center p-0.5"
+                            title="Ganti Foto Produk Ini Langsung"
+                          >
+                            <Camera className="w-3.5 h-3.5 mb-0.5 text-sky-400" />
+                            <span>Ganti</span>
+                            <input
+                              type="file"
+                              accept="image/*"
+                              className="hidden"
+                              onChange={(e) => {
+                                if (e.target.files && e.target.files[0]) {
+                                  handleFileUpload(e.target.files[0], p.item_code);
+                                }
+                              }}
+                            />
+                          </label>
                         </div>
                       </td>
 
@@ -643,31 +720,96 @@ export default function ItemsManager({ adminToken, onStatsUpdated }) {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">
-                    14. URL Foto Produk (atau simpan di public/images/products/)
+              {/* SECTION: FOTO PRODUK LANGSUNG & LINK TOKO */}
+              <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200/80 space-y-4">
+                <div className="flex items-center justify-between">
+                  <label className="block font-bold text-slate-800 text-xs sm:text-sm">
+                    14. Foto Produk (Upload Langsung dari Perangkat atau URL)
                   </label>
-                  <input
-                    type="text"
-                    value={formData.image_url}
-                    onChange={e => setFormData({ ...formData, image_url: e.target.value })}
-                    placeholder="https://..."
-                    className="w-full px-3 py-2 rounded-lg border border-slate-200"
-                  />
+                  {formData.image_url && (
+                    <button
+                      type="button"
+                      onClick={() => setFormData({ ...formData, image_url: '' })}
+                      className="text-[11px] text-rose-600 hover:text-rose-700 font-semibold flex items-center gap-1 transition"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>Hapus Foto</span>
+                    </button>
+                  )}
                 </div>
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">
-                    15. Link Toko Resmi / Official Store
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.official_store_url}
-                    onChange={e => setFormData({ ...formData, official_store_url: e.target.value })}
-                    placeholder="https://tokopedia.com/..."
-                    className="w-full px-3 py-2 rounded-lg border border-slate-200"
-                  />
+
+                <div className="flex flex-col sm:flex-row items-center gap-4">
+                  {/* Photo Preview Box */}
+                  <div className="relative w-28 h-28 sm:w-32 sm:h-32 rounded-2xl bg-white border-2 border-slate-200 overflow-hidden shrink-0 flex items-center justify-center p-2 shadow-xs group">
+                    <img
+                      src={formData.image_url || getProductPlaceholderSrc(formData.brand, formData.category, formData.item_code)}
+                      alt="Preview Produk"
+                      className="w-full h-full object-contain"
+                      onError={(e) => {
+                        e.target.onerror = null;
+                        e.target.src = getProductPlaceholderSrc(formData.brand, formData.category, formData.item_code);
+                      }}
+                    />
+                    {uploadingImage && (
+                      <div className="absolute inset-0 bg-slate-900/70 backdrop-blur-xs flex flex-col items-center justify-center text-white text-[10px] font-bold gap-1">
+                        <RefreshCw className="w-5 h-5 animate-spin text-sky-400" />
+                        <span>Mengunggah...</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Upload Actions & URL input */}
+                  <div className="flex-1 space-y-2.5 w-full">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <label className="cursor-pointer inline-flex items-center gap-2 px-4 py-2 bg-sky-600 hover:bg-sky-700 text-white rounded-xl text-xs font-bold transition shadow-xs">
+                        <Camera className="w-4 h-4" />
+                        <span>{uploadingImage ? 'Mengunggah...' : 'Pilih Foto dari Perangkat'}</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          disabled={uploadingImage}
+                          onChange={(e) => {
+                            if (e.target.files && e.target.files[0]) {
+                              handleFileUpload(e.target.files[0]);
+                            }
+                          }}
+                          className="hidden"
+                        />
+                      </label>
+
+                      <span className="text-[11px] text-slate-400">
+                        JPG, PNG, WebP (Maks 10MB)
+                      </span>
+                    </div>
+
+                    <div className="space-y-1">
+                      <input
+                        type="text"
+                        value={formData.image_url}
+                        onChange={e => setFormData({ ...formData, image_url: e.target.value })}
+                        placeholder="Atau tempel URL gambar eksternal (https://...)"
+                        className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500"
+                      />
+                    </div>
+                    
+                    <p className="text-[10px] text-slate-500">
+                      Foto otomatis di-upload dan tersimpan di server lokal <code className="bg-slate-200 px-1 py-0.5 rounded text-slate-700">public/images/products/</code>
+                    </p>
+                  </div>
                 </div>
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">
+                  15. Link Toko Resmi / Official Store
+                </label>
+                <input
+                  type="text"
+                  value={formData.official_store_url}
+                  onChange={e => setFormData({ ...formData, official_store_url: e.target.value })}
+                  placeholder="https://tokopedia.com/..."
+                  className="w-full px-3 py-2 rounded-lg border border-slate-200"
+                />
               </div>
 
               <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
