@@ -1197,7 +1197,8 @@ const server = http.createServer(async (req, res) => {
         { no: 13, col: 'Warna', desc: 'Varian warna (Black, White, Gray, dll)', req: 'Opsional' },
         { no: 14, col: 'URL Gambar Produk', desc: 'Link langsung file foto (JPG/PNG). Jika kosong, sistem membuat placeholder otomatis', req: 'Opsional' },
         { no: 15, col: 'Link Toko / Marketplace', desc: 'Link produk resmi di Shopee/Tokopedia/website resmi', req: 'Opsional' },
-        { no: 16, col: 'Status Kelengkapan Data', desc: 'Isi "Lengkap" atau "Belum Lengkap"', req: 'Opsional' }
+        { no: 16, col: 'Harga Jual (Rp)', desc: 'Harga jual produk dalam Rupiah (angka saja, misal: 35000)', req: 'Opsional' },
+        { no: 17, col: 'Status Kelengkapan Data', desc: 'Isi "Lengkap" atau "Belum Lengkap"', req: 'Opsional' }
       ];
 
       guideRows.forEach(g => wsGuide.addRow(g));
@@ -1213,6 +1214,136 @@ const server = http.createServer(async (req, res) => {
     } catch (err) {
       console.error('Error generating Excel template:', err);
       return sendJson(req, res, 500, { success: false, message: 'Gagal membuat template Excel: ' + err.message });
+    }
+  }
+
+  // 8a-2. GET /api/admin/export-excel (Export catalog items with prices to Excel)
+  if (req.method === 'GET' && pathname === '/api/admin/export-excel') {
+    try {
+      const auth = req.headers['authorization'] || parsedUrl.searchParams.get('token') || '';
+      if (!auth.includes('auth-token-admin')) {
+        return sendJson(req, res, 403, { success: false, message: 'Akses ditolak. Silakan login sebagai Admin.' });
+      }
+
+      const q = parsedUrl.searchParams.get('q') || '';
+      const brand = parsedUrl.searchParams.get('brand') || '';
+      const category = parsedUrl.searchParams.get('category') || '';
+      const codesParam = parsedUrl.searchParams.get('codes') || '';
+
+      let sql = 'SELECT * FROM products WHERE 1=1';
+      const params = [];
+
+      if (codesParam) {
+        const codesList = codesParam.split(',').map(c => c.trim()).filter(Boolean);
+        if (codesList.length > 0) {
+          const ph = codesList.map(() => '?').join(',');
+          sql += ` AND item_code IN (${ph})`;
+          params.push(...codesList);
+        }
+      } else {
+        if (q) {
+          sql += ` AND (item_code LIKE ? OR item_name LIKE ? OR official_name LIKE ? OR official_sku LIKE ? OR barcode LIKE ?)`;
+          const term = `%${q}%`;
+          params.push(term, term, term, term, term);
+        }
+        if (brand && brand !== 'ALL') {
+          sql += ` AND brand = ?`;
+          params.push(brand);
+        }
+        if (category && category !== 'ALL') {
+          sql += ` AND category = ?`;
+          params.push(category);
+        }
+      }
+
+      sql += ' ORDER BY item_no ASC, id ASC';
+      const rows = db.prepare(sql).all(...params);
+
+      const workbook = new ExcelJS.Workbook();
+      workbook.creator = 'Katalog Aksesoris System';
+      workbook.created = new Date();
+
+      const ws = workbook.addWorksheet('Katalog Produk & Harga', {
+        views: [{ state: 'frozen', ySplit: 1 }]
+      });
+
+      ws.columns = [
+        { header: 'No', key: 'item_no', width: 8 },
+        { header: 'Kode Item (*Wajib Unik)', key: 'item_code', width: 22 },
+        { header: 'Nama Produk Resmi (*Wajib)', key: 'official_name', width: 45 },
+        { header: 'Nama Item (POS/ERP)', key: 'item_name', width: 35 },
+        { header: 'Item Alias', key: 'item_alias', width: 25 },
+        { header: 'Barcode / EAN', key: 'barcode', width: 20 },
+        { header: 'Merk / Brand (*Wajib)', key: 'brand', width: 18 },
+        { header: 'Kategori Produk', key: 'category', width: 28 },
+        { header: 'SKU / Model Resmi', key: 'official_sku', width: 20 },
+        { header: 'Harga Jual (Rp)', key: 'price', width: 20 },
+        { header: 'Spesifikasi Utama', key: 'main_spec', width: 45 },
+        { header: 'Spesifikasi Detail & Fitur', key: 'detail_spec', width: 50 },
+        { header: 'Konektor / Interface', key: 'interface', width: 28 },
+        { header: 'Kompatibilitas', key: 'compatibility', width: 35 },
+        { header: 'Warna', key: 'color', width: 15 },
+        { header: 'URL Gambar Produk', key: 'image_url', width: 35 },
+        { header: 'Link Toko / Marketplace', key: 'official_store_url', width: 35 },
+        { header: 'Status Kelengkapan Data', key: 'status_data', width: 22 }
+      ];
+
+      // Style header row
+      const headerRow = ws.getRow(1);
+      headerRow.height = 30;
+      headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 11, name: 'Calibri' };
+      headerRow.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FF0F172A' } // Slate 900
+      };
+      headerRow.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+
+      rows.forEach((p, idx) => {
+        const row = ws.addRow({
+          item_no: p.item_no || idx + 1,
+          item_code: p.item_code,
+          official_name: p.official_name,
+          item_name: p.item_name,
+          item_alias: p.item_alias || '',
+          barcode: p.barcode || '',
+          brand: p.brand,
+          category: p.category,
+          official_sku: p.official_sku || '',
+          price: p.price || 0,
+          main_spec: p.main_spec || '',
+          detail_spec: p.detail_spec || '',
+          interface: p.interface || '',
+          compatibility: p.compatibility || '',
+          color: p.color || '',
+          image_url: p.image_url || '',
+          official_store_url: p.official_store_url || '',
+          status_data: p.status_data || 'Lengkap'
+        });
+
+        // Format price cell as currency number
+        const priceCell = row.getCell('price');
+        priceCell.numFmt = '#,##0';
+        priceCell.alignment = { horizontal: 'right' };
+      });
+
+      const today = new Date().toISOString().slice(0, 10);
+      const downloadFileName = `Katalog_Produk_Aksesoris_${today}.xlsx`;
+
+      const buffer = await workbook.xlsx.writeBuffer();
+
+      logActivity('admin', 'Administrator Utama', 'EXPORT_EXCEL', 'CATALOG', `Mengekspor ${rows.length} data produk beserta harga ke file Excel`, { count: rows.length }, req);
+
+      res.writeHead(200, {
+        'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'Content-Disposition': `attachment; filename="${downloadFileName}"`,
+        'Content-Length': buffer.length,
+        'Cache-Control': 'no-cache'
+      });
+      return res.end(buffer);
+    } catch (err) {
+      console.error('Error exporting Excel:', err);
+      return sendJson(req, res, 500, { success: false, message: 'Gagal mengekspor data Excel: ' + err.message });
     }
   }
 

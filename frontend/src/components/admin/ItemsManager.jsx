@@ -30,6 +30,7 @@ export default function ItemsManager({ adminToken, onStatsUpdated }) {
   // Import Excel State
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [downloadingTemplate, setDownloadingTemplate] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   // Delete State
   const [deleteConfirmCode, setDeleteConfirmCode] = useState(null);
@@ -264,6 +265,45 @@ export default function ItemsManager({ adminToken, onStatsUpdated }) {
     }
   }
 
+  async function handleExportExcel(customCodes = null) {
+    setExporting(true);
+    try {
+      let url = '/api/admin/export-excel?';
+      const params = new URLSearchParams();
+      if (customCodes && customCodes.length > 0) {
+        params.append('codes', customCodes.join(','));
+      } else {
+        if (search) params.append('q', search);
+        if (selectedBrand && selectedBrand !== 'ALL') params.append('brand', selectedBrand);
+        if (selectedCategory && selectedCategory !== 'ALL') params.append('category', selectedCategory);
+      }
+      url += params.toString();
+
+      const res = await fetch(url, {
+        headers: { 'Authorization': adminToken }
+      });
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.message || 'Gagal mengekspor data Excel');
+      }
+
+      const blob = await res.blob();
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = downloadUrl;
+      const today = new Date().toISOString().slice(0, 10);
+      a.download = `Katalog_Produk_Aksesoris_${today}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(downloadUrl);
+    } catch (err) {
+      alert('Error saat mengekspor Excel: ' + err.message);
+    } finally {
+      setExporting(false);
+    }
+  }
+
   async function handleFileUpload(file, targetItemCode = null) {
     if (!file) return;
     if (!file.type.startsWith('image/')) {
@@ -358,6 +398,18 @@ export default function ItemsManager({ adminToken, onStatsUpdated }) {
             <span>Import Excel</span>
           </button>
 
+          {/* Export Excel Button */}
+          <button
+            type="button"
+            onClick={() => handleExportExcel()}
+            disabled={exporting}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2.5 bg-sky-50 hover:bg-sky-100 text-sky-800 border border-sky-300 rounded-xl text-xs font-bold transition shadow-2xs disabled:opacity-50"
+            title="Export Semua / Hasil Filter Produk ke Format Excel (.xlsx) Lengkap dengan Harga"
+          >
+            <FileSpreadsheet className={`w-4 h-4 text-sky-600 ${exporting ? 'animate-spin' : ''}`} />
+            <span>{exporting ? 'Mengekspor...' : 'Export Excel'}</span>
+          </button>
+
           {/* Add Item Manual Button */}
           <button
             type="button"
@@ -434,6 +486,16 @@ export default function ItemsManager({ adminToken, onStatsUpdated }) {
           </div>
 
           <div className="flex items-center gap-2">
+            <button
+              onClick={() => handleExportExcel(Array.from(selectedCodes))}
+              disabled={exporting}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition shadow-xs active:scale-95 cursor-pointer disabled:opacity-50"
+              title="Export hanya item-item yang dipilih ke Excel"
+            >
+              <FileSpreadsheet className={`w-3.5 h-3.5 ${exporting ? 'animate-spin' : ''}`} />
+              <span>Export {selectedCodes.size} Terpilih</span>
+            </button>
+
             <button
               onClick={() => setIsBulkDeleteModalOpen(true)}
               className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold transition shadow-xs active:scale-95 cursor-pointer"
