@@ -34,6 +34,75 @@ export default function ItemsManager({ adminToken, onStatsUpdated }) {
   // Delete State
   const [deleteConfirmCode, setDeleteConfirmCode] = useState(null);
 
+  // Multi-select Checkbox State
+  const [selectedCodes, setSelectedCodes] = useState(new Set());
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [isBulkDeleteModalOpen, setIsBulkDeleteModalOpen] = useState(false);
+
+  function toggleSelectCode(code) {
+    setSelectedCodes(prev => {
+      const next = new Set(prev);
+      if (next.has(code)) {
+        next.delete(code);
+      } else {
+        next.add(code);
+      }
+      return next;
+    });
+  }
+
+  const allPageSelected = products.length > 0 && products.every(p => selectedCodes.has(p.item_code));
+
+  function toggleSelectAll() {
+    if (allPageSelected) {
+      setSelectedCodes(prev => {
+        const next = new Set(prev);
+        products.forEach(p => next.delete(p.item_code));
+        return next;
+      });
+    } else {
+      setSelectedCodes(prev => {
+        const next = new Set(prev);
+        products.forEach(p => next.add(p.item_code));
+        return next;
+      });
+    }
+  }
+
+  function clearSelection() {
+    setSelectedCodes(new Set());
+  }
+
+  async function handleBulkDelete() {
+    if (selectedCodes.size === 0) return;
+    setBulkDeleting(true);
+    try {
+      const res = await fetch('/api/admin/products/bulk-delete', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': adminToken
+        },
+        body: JSON.stringify({
+          codes: Array.from(selectedCodes)
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setIsBulkDeleteModalOpen(false);
+        clearSelection();
+        loadProducts();
+        if (onStatsUpdated) onStatsUpdated();
+      } else {
+        alert(data.message || 'Gagal menghapus data');
+      }
+    } catch (err) {
+      alert('Kesalahan server: ' + err.message);
+    } finally {
+      setBulkDeleting(false);
+    }
+  }
+
   function getInitialForm() {
     return {
       item_code: '',
@@ -343,12 +412,52 @@ export default function ItemsManager({ adminToken, onStatsUpdated }) {
         </button>
       </div>
 
+      {/* Bulk Action Bar (Muncul saat ada item yang dicentang) */}
+      {selectedCodes.size > 0 && (
+        <div className="bg-amber-50 border border-amber-200 text-amber-900 rounded-2xl p-3.5 sm:p-4 flex flex-wrap items-center justify-between gap-3 shadow-xs animate-fade-fast">
+          <div className="flex items-center gap-3">
+            <span className="flex h-3 w-3 relative">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-3 w-3 bg-amber-500"></span>
+            </span>
+            <span className="text-xs sm:text-sm font-bold text-amber-950">
+              {selectedCodes.size} produk terpilih
+            </span>
+            <button
+              onClick={clearSelection}
+              className="text-xs text-amber-800 hover:text-amber-950 underline font-semibold ml-1 cursor-pointer"
+            >
+              Batalkan Pilihan
+            </button>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setIsBulkDeleteModalOpen(true)}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold transition shadow-xs active:scale-95 cursor-pointer"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>Hapus {selectedCodes.size} Item Terpilih</span>
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Table Area */}
       <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse text-xs">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold uppercase tracking-wider text-[11px]">
+                <th className="py-3 px-3 w-10 text-center">
+                  <input
+                    type="checkbox"
+                    checked={allPageSelected}
+                    onChange={toggleSelectAll}
+                    title="Pilih Semua Item di Halaman Ini"
+                    className="w-4 h-4 rounded text-sky-600 focus:ring-sky-500 border-slate-300 cursor-pointer"
+                  />
+                </th>
                 <th className="py-3 px-3 w-12 text-center">No</th>
                 <th className="py-3 px-3 w-16">Foto</th>
                 <th className="py-3 px-3">Kode / Barcode</th>
@@ -361,7 +470,7 @@ export default function ItemsManager({ adminToken, onStatsUpdated }) {
             <tbody className="divide-y divide-slate-100">
               {loading ? (
                 <tr>
-                  <td colSpan="7" className="py-12 text-center text-slate-400">
+                  <td colSpan="8" className="py-12 text-center text-slate-400">
                     <div className="flex items-center justify-center gap-2">
                       <RefreshCw className="w-4 h-4 animate-spin text-sky-600" />
                       <span>Memuat data produk...</span>
@@ -370,7 +479,7 @@ export default function ItemsManager({ adminToken, onStatsUpdated }) {
                 </tr>
               ) : products.length === 0 ? (
                 <tr>
-                  <td colSpan="7" className="py-12 text-center text-slate-400">
+                  <td colSpan="8" className="py-12 text-center text-slate-400">
                     Tidak ada produk yang cocok dengan pencarian / filter Anda.
                   </td>
                 </tr>
@@ -378,9 +487,22 @@ export default function ItemsManager({ adminToken, onStatsUpdated }) {
                 products.map((p, idx) => {
                   const theme = getBrandTheme(p.brand);
                   const imgSrc = getProductImageSrc(p);
+                  const isChecked = selectedCodes.has(p.item_code);
 
                   return (
-                    <tr key={p.item_code} className="hover:bg-slate-50/70 transition">
+                    <tr 
+                      key={p.item_code} 
+                      className={`transition ${isChecked ? 'bg-sky-50/80 hover:bg-sky-100/60' : 'hover:bg-slate-50/70'}`}
+                    >
+                      {/* Checkbox Row */}
+                      <td className="py-3 px-3 text-center">
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={() => toggleSelectCode(p.item_code)}
+                          className="w-4 h-4 rounded text-sky-600 focus:ring-sky-500 border-slate-300 cursor-pointer"
+                        />
+                      </td>
                       
                       {/* No */}
                       <td className="py-3 px-3 text-center text-slate-400 font-mono">
@@ -845,6 +967,48 @@ export default function ItemsManager({ adminToken, onStatsUpdated }) {
           if (onStatsUpdated) onStatsUpdated();
         }}
       />
+
+      {/* Modal Konfirmasi Hapus Massal */}
+      {isBulkDeleteModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-fade-fast">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 text-center border border-slate-100 animate-modal-in gpu-accelerated">
+            <div className="w-14 h-14 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center mx-auto mb-4">
+              <Trash2 className="w-7 h-7" />
+            </div>
+            <h3 className="text-lg font-bold text-slate-900 mb-2">
+              Hapus {selectedCodes.size} Produk Sekaligus?
+            </h3>
+            <p className="text-xs text-slate-500 mb-6 leading-relaxed">
+              Anda akan menghapus data <strong className="text-slate-800">{selectedCodes.size} item produk</strong> yang telah Anda tandai. Tindakan ini permanen dan data yang dihapus tidak dapat dipulihkan kembali.
+            </p>
+            <div className="flex items-center justify-center gap-3">
+              <button
+                type="button"
+                disabled={bulkDeleting}
+                onClick={() => setIsBulkDeleteModalOpen(false)}
+                className="px-4 py-2 rounded-xl border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition active:scale-95"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                disabled={bulkDeleting}
+                onClick={handleBulkDelete}
+                className="inline-flex items-center gap-2 px-5 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold transition shadow-xs active:scale-95 cursor-pointer disabled:opacity-50"
+              >
+                {bulkDeleting ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>Menghapus...</span>
+                  </>
+                ) : (
+                  <span>Ya, Hapus {selectedCodes.size} Produk</span>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );

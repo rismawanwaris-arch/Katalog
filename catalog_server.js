@@ -806,6 +806,36 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
+  // 8b. POST /api/admin/products/bulk-delete (Bulk Delete Multiple Products)
+  if (req.method === 'POST' && pathname === '/api/admin/products/bulk-delete') {
+    try {
+      const auth = req.headers['authorization'] || '';
+      if (!auth.includes('auth-token-admin')) {
+        return sendJson(req, res, 403, { success: false, message: 'Akses ditolak. Silakan login sebagai Admin.' });
+      }
+
+      const body = await parseJsonBody(req);
+      const { codes } = body;
+      if (!Array.isArray(codes) || codes.length === 0) {
+        return sendJson(req, res, 400, { success: false, message: 'Daftar kode item wajib disertakan!' });
+      }
+
+      const placeholders = codes.map(() => '?').join(',');
+      db.prepare(`DELETE FROM products WHERE item_code IN (${placeholders})`).run(...codes);
+
+      logActivity('admin', 'Administrator Utama', 'ITEM_BULK_DELETE', 'CATALOG', `Menghapus massal ${codes.length} produk dari katalog database`, { count: codes.length, codes }, req);
+
+      return sendJson(req, res, 200, {
+        success: true,
+        count: codes.length,
+        message: `Berhasil menghapus ${codes.length} produk yang dipilih.`
+      });
+    } catch (err) {
+      console.error('Error in bulk-delete:', err);
+      return sendJson(req, res, 500, { success: false, message: 'Gagal menghapus produk massal: ' + err.message });
+    }
+  }
+
   // POST /api/admin/upload-image (Direct photo upload for product)
   if (req.method === 'POST' && pathname === '/api/admin/upload-image') {
     try {
