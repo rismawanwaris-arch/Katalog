@@ -6,10 +6,14 @@ services:
     ports:
       # Port 3600 aman & belum dipakai di ZimaOS
       - "3600:3600"
+    extra_hosts:
+      # Memungkinkan kontainer menghubungi port di host ZimaOS (laporan-stock-app di port 3500)
+      - "host.docker.internal:host-gateway"
     environment:
       - PORT=3600
       - CATALOG_HOST=0.0.0.0
-      - STOCK_API_URL=http://100.86.129.52:3500
+      # Karena berjalan di mesin yang sama dengan server stok di ZimaOS:
+      - STOCK_API_URL=http://host.docker.internal:3500
     volumes:
       # Persistent storage agar database & foto produk tidak hilang saat server restart
       - ./catalog.db:/app/catalog.db
