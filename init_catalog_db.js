@@ -39,6 +39,88 @@ db.exec(`
   );
 `);
 
+function normalizeProductCategory(p) {
+  const currentCat = p.category || '';
+  const nameUpper = (p.item_name || '').toUpperCase();
+  const offUpper = (p.official_name || '').toUpperCase();
+  const specUpper = (p.main_spec || '').toUpperCase();
+  const ifaceUpper = (p.interface || '').toUpperCase();
+  const fullText = `${nameUpper} ${offUpper} ${specUpper} ${ifaceUpper} ${currentCat}`.toUpperCase();
+
+  const isChargerContext = currentCat.includes('Charger') || currentCat.includes('Batok') || 
+                           nameUpper.startsWith('BATOK') || nameUpper.startsWith('CHARGER') || 
+                           nameUpper.startsWith('CAR CRGR') || nameUpper.startsWith('CAR CHARGER');
+
+  if (isChargerContext) {
+    if (nameUpper.includes('CAR CHARGER') || nameUpper.includes('CAR CRGR') || currentCat.includes('Car Charger')) {
+      return 'Car Charger (Mobil)';
+    }
+
+    if (/\bGAN\b/.test(fullText)) {
+      return 'Charger GaN (Teknologi GaN)';
+    }
+
+    const isSet = currentCat.includes('Set') || nameUpper.includes('SET') || offUpper.includes('SET') || 
+                  offUpper.includes('WITH') || specUpper.includes('TERMASUK KABEL') || specUpper.includes('PAKET BUNDLING');
+    if (isSet) {
+      if (fullText.includes('1.5A') || fullText.includes('7.5W') || nameUpper.includes('CQ15')) {
+        return 'Charger Set 1.5A (Standar)';
+      }
+      return 'Charger Set 2.4A / Fast Charging';
+    }
+
+    if ((fullText.includes('1.5A') || fullText.includes('7.5W') || nameUpper.includes('CH002') || nameUpper.includes('BF15') || nameUpper.includes('TC01')) && 
+        !nameUpper.includes('3A') && !fullText.includes('18W')) {
+      return 'Batok Charger 1.5A (Standar)';
+    }
+    return 'Batok Fast Charger (2.4A - 3A / PD)';
+  }
+
+  const isExcludedCable = fullText.includes('HDMI') || fullText.includes('LAN') || fullText.includes('CONVERTER') || 
+                          fullText.includes('PRINTER') || fullText.includes('AUX') || nameUpper.includes('MALE TO MALE') || 
+                          nameUpper.includes('MINI-B');
+
+  const isCableContext = (currentCat.includes('Kabel Data') || currentCat.includes('Kabel Toples') || 
+                          currentCat.includes('Kabel Flex') || currentCat.includes('Kabel Braided') || 
+                          currentCat.includes('Kabel Tebal') || nameUpper.startsWith('KABEL DATA') || 
+                          p.item_code === '004012') && !isExcludedCable;
+
+  if (isCableContext) {
+    if (nameUpper.includes('3 IN 1') || nameUpper.includes('3IN1') || nameUpper.includes('4 IN 1') || nameUpper.includes('4IN1') || nameUpper.includes('TRIPLE')) {
+      return 'Kabel Data Multi (3-in-1)';
+    }
+    if (nameUpper.includes('C TO C') || nameUpper.includes('C-TO-C') || offUpper.includes('C TO C') || 
+        offUpper.includes('TYPE-C TO TYPE-C') || offUpper.includes('USB-C TO USB-C') || 
+        nameUpper.includes('CB01-CC') || nameUpper.includes('TB01-CC') || nameUpper.includes('CC 100W') || 
+        ifaceUpper === 'USB TYPE-C TO TYPE-C') {
+      return 'Kabel Data C to C';
+    }
+    if (nameUpper.includes('C TO L') || nameUpper.includes('C-TO-L') || offUpper.includes('C TO L') || 
+        offUpper.includes('C TO LIGHTNING') || offUpper.includes('TYPE-C TO LIGHTNING') || 
+        nameUpper.includes('CB01-CL') || nameUpper.includes('TB01-CL') || nameUpper.includes('C-L')) {
+      return 'Kabel Data C to L';
+    }
+    if (/LIGHT(N)?ING/.test(fullText) || nameUpper.includes('IPHONE') || nameUpper.includes('IPH') || 
+        nameUpper.includes('TO L') || nameUpper.includes('DGL') || nameUpper.includes('KA02-L') || 
+        nameUpper.includes('CSL100') || nameUpper.includes('RGL100')) {
+      return 'Kabel Data Lightning';
+    }
+    if (nameUpper.includes('MICRO') || nameUpper.includes('MIKRO') || nameUpper.includes('V8') || 
+        nameUpper.includes('TO M') || nameUpper.includes('TOPLES M') || nameUpper.includes('DGM') || 
+        nameUpper.includes('KA02-M') || nameUpper.includes('CSM100') || nameUpper.includes('RBM100')) {
+      return 'Kabel Data Micro';
+    }
+    if (nameUpper.includes('TYPE C') || nameUpper.includes('TYPE-C') || nameUpper.includes('USB-C') || 
+        nameUpper.includes('USB TO C') || nameUpper.includes('DGC') || nameUpper.includes('KA02-C') || 
+        nameUpper.includes('CBC100S')) {
+      return 'Kabel Data Type-C';
+    }
+    return 'Kabel Data Lainnya';
+  }
+
+  return currentCat;
+}
+
 // Check if initial dataset exists locally to seed
 const parsedPath = path.join(__dirname, 'parsed_items.json');
 if (fs.existsSync(parsedPath)) {
@@ -97,7 +179,13 @@ if (fs.existsSync(parsedPath)) {
         it.alias || '',
         it.barcode || '',
         it.brand || d.brand || 'CAMPURAN',
-        d.category || it.model || 'Aksesoris HP',
+        normalizeProductCategory({
+          item_name: it.name,
+          official_name: d.fullName || it.name,
+          main_spec: d.mainSpec,
+          interface: d.interface,
+          category: d.category || it.model || 'Aksesoris HP'
+        }),
         d.sku || it.alias || it.code,
         d.fullName || it.name,
         d.mainSpec || 'Spesifikasi standar aksesoris',
