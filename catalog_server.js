@@ -618,6 +618,7 @@ const server = http.createServer(async (req, res) => {
       const selectedOutlet = (parsedUrl.searchParams.get('outlet') || '').trim();
       const onlyReady = parsedUrl.searchParams.get('ready') === 'true';
       const sort = (parsedUrl.searchParams.get('sort') || 'default').trim();
+      const priceRange = (parsedUrl.searchParams.get('price_range') || 'ALL').trim();
 
       let sql = 'SELECT * FROM products WHERE 1=1';
       const params = [];
@@ -630,6 +631,16 @@ const server = http.createServer(async (req, res) => {
       if (category && category !== 'ALL') {
         sql += ' AND category = ?';
         params.push(category);
+      }
+
+      if (priceRange === 'under_25k') {
+        sql += ' AND price > 0 AND price < 25000';
+      } else if (priceRange === '25k_50k') {
+        sql += ' AND price >= 25000 AND price <= 50000';
+      } else if (priceRange === '50k_100k') {
+        sql += ' AND price > 50000 AND price <= 100000';
+      } else if (priceRange === 'over_100k') {
+        sql += ' AND price > 100000';
       }
 
       if (search) {
@@ -705,9 +716,11 @@ const server = http.createServer(async (req, res) => {
         ? (selectedOutlet ? products.filter(p => p.outletStock > 0) : products.filter(p => p.totalNetworkStock > 0))
         : products;
 
-      // Extract unique brands & categories for filter UI
+      // Extract unique brands & categories for filter UI with counts
       const brands = db.prepare('SELECT DISTINCT brand FROM products ORDER BY brand ASC').all().map(r => r.brand);
       const categories = db.prepare('SELECT DISTINCT category FROM products ORDER BY category ASC').all().map(r => r.category);
+      const categoryCounts = db.prepare('SELECT category, count(*) as count FROM products GROUP BY category ORDER BY count DESC, category ASC').all();
+      const brandCounts = db.prepare('SELECT brand, count(*) as count FROM products GROUP BY brand ORDER BY count DESC, brand ASC').all();
 
       return sendJson(req, res, 200, {
         success: true,
@@ -717,6 +730,8 @@ const server = http.createServer(async (req, res) => {
         lastStockSync: lastStockSyncTime,
         brands,
         categories,
+        categoryCounts,
+        brandCounts,
         products: filtered
       });
     } catch (err) {

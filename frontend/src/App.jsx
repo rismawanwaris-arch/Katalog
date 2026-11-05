@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import Navbar from './components/Navbar';
 import FilterBar from './components/FilterBar';
+import CategorySidebar from './components/CategorySidebar';
 import ProductCard from './components/ProductCard';
 import ProductDetailModal from './components/ProductDetailModal';
 import ProductCompareModal from './components/ProductCompareModal';
@@ -31,9 +32,26 @@ export default function App() {
   const [stockFilter, setStockFilter] = useState('ALL'); // 'ALL' or 'READY'
   const [selectedBrand, setSelectedBrand] = useState('ALL');
   const [selectedCategory, setSelectedCategory] = useState('ALL');
+  const [priceRange, setPriceRange] = useState('ALL'); // 'ALL', 'under_25k', '25k_50k', '50k_100k', 'over_100k'
   const [sortBy, setSortBy] = useState('default'); // 'default', 'az', 'za', 'price_asc', 'price_desc', 'category'
   const [brands, setBrands] = useState([]);
   const [categories, setCategories] = useState([]);
+  const [categoryCounts, setCategoryCounts] = useState([]);
+  const [brandCounts, setBrandCounts] = useState([]);
+
+  // Sidebar Layout State
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
+    return localStorage.getItem('katalog_sidebar_collapsed') === 'true';
+  });
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+
+  function handleToggleSidebar() {
+    setIsSidebarCollapsed(prev => {
+      const next = !prev;
+      localStorage.setItem('katalog_sidebar_collapsed', String(next));
+      return next;
+    });
+  }
 
   // Modals
   const [isStoreModalOpen, setIsStoreModalOpen] = useState(false);
@@ -91,6 +109,7 @@ export default function App() {
       if (searchQuery.trim()) params.set('q', searchQuery.trim());
       if (selectedBrand && selectedBrand !== 'ALL') params.set('brand', selectedBrand);
       if (selectedCategory && selectedCategory !== 'ALL') params.set('category', selectedCategory);
+      if (priceRange && priceRange !== 'ALL') params.set('price_range', priceRange);
       if (currentStore) params.set('outlet', currentStore);
       if (stockFilter === 'READY') params.set('ready', 'true');
       if (sortBy && sortBy !== 'default') params.set('sort', sortBy);
@@ -103,6 +122,8 @@ export default function App() {
         setTotalProducts(data.total || 0);
         if (data.brands && brands.length === 0) setBrands(data.brands);
         if (data.categories && categories.length === 0) setCategories(data.categories);
+        if (data.categoryCounts) setCategoryCounts(data.categoryCounts);
+        if (data.brandCounts) setBrandCounts(data.brandCounts);
         if (data.reportDate) setReportDate(data.reportDate);
       }
     } catch (err) {
@@ -110,7 +131,7 @@ export default function App() {
     } finally {
       setLoading(false);
     }
-  }, [searchQuery, selectedBrand, selectedCategory, currentStore, stockFilter, sortBy, brands.length, categories.length]);
+  }, [searchQuery, selectedBrand, selectedCategory, priceRange, currentStore, stockFilter, sortBy, brands.length, categories.length]);
 
   // Debounced search & filter trigger
   useEffect(() => {
@@ -149,6 +170,7 @@ export default function App() {
     setStockFilter('ALL');
     setSelectedBrand('ALL');
     setSelectedCategory('ALL');
+    setPriceRange('ALL');
     setSortBy('default');
   }
 
@@ -254,7 +276,7 @@ export default function App() {
       />
 
       {/* Main Container */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex-1 w-full">
+      <main className="max-w-[1780px] mx-auto px-3 sm:px-4 lg:px-6 py-5 flex-1 w-full">
         
         {/* Filter Bar with Store Status & Stock Tabs */}
         <FilterBar
@@ -274,62 +296,104 @@ export default function App() {
           categories={categories}
           sortBy={sortBy}
           onSortChange={setSortBy}
+          priceRange={priceRange}
+          onPriceRangeChange={setPriceRange}
           totalItems={totalProducts}
           onResetFilters={handleResetFilters}
+          isSidebarCollapsed={isSidebarCollapsed}
+          onToggleSidebar={handleToggleSidebar}
+          onOpenMobileSidebar={() => setIsMobileSidebarOpen(true)}
         />
 
-        {/* Product Grid Area */}
-        {loading ? (
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
-            {[...Array(8)].map((_, i) => (
-              <div key={i} className="bg-white rounded-2xl border border-slate-200/80 p-3 sm:p-4 flex flex-col justify-between animate-pulse">
-                <div>
-                  <div className="w-full aspect-square bg-slate-200/70 rounded-xl mb-3" />
-                  <div className="h-4 bg-slate-200/80 rounded w-1/3 mb-2" />
-                  <div className="h-4 bg-slate-200/80 rounded w-5/6 mb-1.5" />
-                  <div className="h-3 bg-slate-100 rounded w-1/2 mb-4" />
-                </div>
-                <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
-                  <div className="h-5 bg-slate-200/80 rounded w-2/5" />
-                  <div className="h-7 bg-slate-200/80 rounded-lg w-1/3" />
-                </div>
+        {/* Content Area: Sidebar + Products */}
+        <div className="flex gap-5 items-start">
+          
+          {/* Category & Brand Sidebar */}
+          <CategorySidebar
+            categories={categories}
+            categoryCounts={categoryCounts}
+            selectedCategory={selectedCategory}
+            onCategoryChange={setSelectedCategory}
+            brands={brands}
+            brandCounts={brandCounts}
+            selectedBrand={selectedBrand}
+            onBrandChange={setSelectedBrand}
+            priceRange={priceRange}
+            onPriceRangeChange={setPriceRange}
+            stockFilter={stockFilter}
+            onStockFilterChange={setStockFilter}
+            totalProducts={totalProducts}
+            onResetFilters={handleResetFilters}
+            isCollapsed={isSidebarCollapsed}
+            onToggleCollapse={handleToggleSidebar}
+            isMobileOpen={isMobileSidebarOpen}
+            onCloseMobile={() => setIsMobileSidebarOpen(false)}
+          />
+
+          {/* Product Grid Area */}
+          <div className="flex-1 min-w-0">
+            {loading ? (
+              <div className={`grid gap-3.5 sm:gap-4 ${
+                isSidebarCollapsed
+                  ? 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6'
+                  : 'grid-cols-1 xs:grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5'
+              }`}>
+                {[...Array(12)].map((_, i) => (
+                  <div key={i} className="bg-white rounded-2xl border border-slate-200/80 p-3 sm:p-4 flex flex-col justify-between animate-pulse">
+                    <div>
+                      <div className="w-full aspect-square bg-slate-200/70 rounded-xl mb-3" />
+                      <div className="h-4 bg-slate-200/80 rounded w-1/3 mb-2" />
+                      <div className="h-4 bg-slate-200/80 rounded w-5/6 mb-1.5" />
+                      <div className="h-3 bg-slate-100 rounded w-1/2 mb-4" />
+                    </div>
+                    <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
+                      <div className="h-5 bg-slate-200/80 rounded w-2/5" />
+                      <div className="h-7 bg-slate-200/80 rounded-lg w-1/3" />
+                    </div>
+                  </div>
+                ))}
               </div>
-            ))}
+            ) : products.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-16 bg-white rounded-2xl border border-slate-200/80 p-8 text-center">
+                <div className="w-16 h-16 rounded-2xl bg-slate-100 flex items-center justify-center text-slate-400 mb-4">
+                  <PackageSearch className="w-8 h-8" />
+                </div>
+                <h3 className="text-base font-bold text-slate-800 mb-1">
+                  Tidak Ada Produk yang Ditemukan
+                </h3>
+                <p className="text-xs sm:text-sm text-slate-500 max-w-md mb-4">
+                  {stockFilter === 'READY' && currentStore
+                    ? `Tidak ada item yang memiliki stok ready di toko ${currentStore} dengan filter saat ini.`
+                    : 'Coba ubah kata kunci pencarian atau reset filter untuk melihat item lainnya.'}
+                </p>
+                <button
+                  onClick={handleResetFilters}
+                  className="px-4 py-2 bg-sky-700 text-white rounded-xl text-xs font-bold hover:bg-sky-800 transition"
+                >
+                  Reset Semua Filter
+                </button>
+              </div>
+            ) : (
+              <div className={`grid gap-3.5 sm:gap-4 ${
+                isSidebarCollapsed
+                  ? 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-6'
+                  : 'grid-cols-1 xs:grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 3xl:grid-cols-6'
+              }`}>
+                {products.map(p => (
+                  <ProductCard
+                    key={p.item_code}
+                    product={p}
+                    currentStore={currentStore}
+                    onOpenDetail={handleOpenDetail}
+                    isCompared={comparedProducts.some(cp => cp.item_code === p.item_code)}
+                    onToggleCompare={handleToggleCompare}
+                  />
+                ))}
+              </div>
+            )}
           </div>
-        ) : products.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16 bg-white rounded-2xl border border-slate-200/80 p-8 text-center">
-            <div className="w-16 h-16 rounded-2xl bg-slate-100 flex items-center justify-center text-slate-400 mb-4">
-              <PackageSearch className="w-8 h-8" />
-            </div>
-            <h3 className="text-base font-bold text-slate-800 mb-1">
-              Tidak Ada Produk yang Ditemukan
-            </h3>
-            <p className="text-xs sm:text-sm text-slate-500 max-w-md mb-4">
-              {stockFilter === 'READY' && currentStore
-                ? `Tidak ada item yang memiliki stok ready di toko ${currentStore} dengan filter saat ini.`
-                : 'Coba ubah kata kunci pencarian atau reset filter untuk melihat item lainnya.'}
-            </p>
-            <button
-              onClick={handleResetFilters}
-              className="px-4 py-2 bg-sky-700 text-white rounded-xl text-xs font-bold hover:bg-sky-800 transition"
-            >
-              Reset Semua Filter
-            </button>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-5">
-            {products.map(p => (
-              <ProductCard
-                key={p.item_code}
-                product={p}
-                currentStore={currentStore}
-                onOpenDetail={handleOpenDetail}
-                isCompared={comparedProducts.some(cp => cp.item_code === p.item_code)}
-                onToggleCompare={handleToggleCompare}
-              />
-            ))}
-          </div>
-        )}
+
+        </div>
 
       </main>
 
@@ -343,7 +407,7 @@ export default function App() {
 
       {/* Footer */}
       <footer className="mt-auto py-6 border-t border-slate-200 bg-white text-center text-xs text-slate-400">
-        <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
+        <div className="max-w-[1780px] mx-auto px-3 sm:px-4 lg:px-6 flex flex-col sm:flex-row items-center justify-between gap-2">
           <span>
             Katalog Aksesoris &amp; Product Knowledge © 2026. Terhubung API Stok Cabang.
           </span>
