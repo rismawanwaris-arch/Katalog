@@ -25,6 +25,7 @@ db.exec(`
     compatibility TEXT,
     color TEXT,
     image_url TEXT,
+    gallery_images TEXT DEFAULT '[]',
     official_store_url TEXT,
     price INTEGER DEFAULT 0,
     status_data TEXT DEFAULT 'Lengkap',

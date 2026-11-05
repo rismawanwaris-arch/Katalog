@@ -76,6 +76,22 @@ export function getProductImageSrc(product) {
   return getProductPlaceholderSrc(product.brand, product.category, product.item_code);
 }
 
+// Get All Gallery Images with Fallback
+export function getProductGalleryImages(product) {
+  if (!product) return [];
+  let images = [];
+  if (Array.isArray(product.gallery_images) && product.gallery_images.length > 0) {
+    images = product.gallery_images.filter(img => img && !img.includes('images.tokopedia.net') && !img.includes('placehold.co'));
+  }
+  if (images.length === 0 && product.image_url && !product.image_url.includes('images.tokopedia.net') && !product.image_url.includes('placehold.co')) {
+    images = [product.image_url];
+  }
+  if (images.length === 0) {
+    images = [getProductPlaceholderSrc(product.brand, product.category, product.item_code)];
+  }
+  return images;
+}
+
 // Format Rupiah Currency
 export function formatRupiah(amount) {
   if (!amount || isNaN(amount) || amount <= 0) {

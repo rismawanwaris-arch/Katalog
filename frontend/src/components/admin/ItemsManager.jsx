@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { 
   Search, Plus, Edit2, Trash2, X, Check, Eye, AlertCircle, RefreshCw, 
-  FileSpreadsheet, FileDown, Camera, Image, ArrowUpDown
+  FileSpreadsheet, FileDown, Camera, Image, ArrowUpDown, Images
 } from 'lucide-react';
 import { getProductImageSrc, getProductPlaceholderSrc, getBrandTheme, formatRupiah } from '../../utils/productUtils';
 import ImportExcelModal from './ImportExcelModal';
+import ProductGalleryModal from './ProductGalleryModal';
 
 export default function ItemsManager({ adminToken, onStatsUpdated }) {
   const [products, setProducts] = useState([]);
@@ -24,9 +25,10 @@ export default function ItemsManager({ adminToken, onStatsUpdated }) {
   const [formLoading, setFormLoading] = useState(false);
   const [formError, setFormError] = useState('');
 
-  // Image Upload State
+  // Image Upload & Gallery Modal State
   const [uploadingImage, setUploadingImage] = useState(false);
   const [imageUploadError, setImageUploadError] = useState('');
+  const [galleryModalProduct, setGalleryModalProduct] = useState(null);
 
   // Import Excel State
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
@@ -121,6 +123,7 @@ export default function ItemsManager({ adminToken, onStatsUpdated }) {
       compatibility: '',
       color: 'Black',
       image_url: '',
+      gallery_images: [],
       official_store_url: '',
       price: 0,
       status_data: 'Lengkap'
@@ -179,6 +182,9 @@ export default function ItemsManager({ adminToken, onStatsUpdated }) {
       compatibility: product.compatibility || '',
       color: product.color || '',
       image_url: product.image_url || '',
+      gallery_images: Array.isArray(product.gallery_images) && product.gallery_images.length > 0
+        ? product.gallery_images
+        : (product.image_url ? [product.image_url] : []),
       official_store_url: product.official_store_url || '',
       price: product.price || 0,
       status_data: product.status_data || 'Lengkap'
@@ -361,6 +367,64 @@ export default function ItemsManager({ adminToken, onStatsUpdated }) {
       }
     };
     reader.readAsDataURL(file);
+  }
+
+  async function handleMultiFileUploadInForm(fileList) {
+    if (!fileList || fileList.length === 0) return;
+    const files = Array.from(fileList).filter(f => f.type.startsWith('image/'));
+    if (files.length === 0) {
+      alert('Pilih file gambar yang valid (JPG, PNG, WebP, GIF)');
+      return;
+    }
+
+    setUploadingImage(true);
+    try {
+      const results = [];
+      for (const file of files) {
+        const base64 = await new Promise((res, rej) => {
+          const reader = new FileReader();
+          reader.onload = () => res(reader.result);
+          reader.onerror = rej;
+          reader.readAsDataURL(file);
+        });
+
+        const resp = await fetch('/api/admin/upload-image', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': adminToken
+          },
+          body: JSON.stringify({
+            imageBase64: base64,
+            fileName: file.name,
+            itemCode: formData.item_code || null
+          })
+        });
+        const data = await resp.json();
+        if (data.success && data.imageUrl) {
+          results.push(data.imageUrl);
+        }
+      }
+
+      if (results.length > 0) {
+        setFormData(prev => {
+          const current = Array.isArray(prev.gallery_images) ? [...prev.gallery_images] : [];
+          results.forEach(r => {
+            if (!current.includes(r)) current.push(r);
+          });
+          return {
+            ...prev,
+            gallery_images: current,
+            image_url: prev.image_url || current[0] || ''
+          };
+        });
+        alert(`Berhasil menambahkan ${results.length} foto!`);
+      }
+    } catch (err) {
+      alert('Error saat mengunggah foto: ' + err.message);
+    } finally {
+      setUploadingImage(false);
+    }
   }
 
   return (
@@ -594,9 +658,13 @@ export default function ItemsManager({ adminToken, onStatsUpdated }) {
                         {p.item_no || idx + 1}
                       </td>
 
-                      {/* Image Thumbnail with Direct Quick Upload */}
+                      {/* Image Thumbnail with Direct Quick Upload & Multi-Gallery Opener */}
                       <td className="py-2.5 px-3">
-                        <div className="relative group w-12 h-12 rounded-xl bg-slate-100 border border-slate-200 overflow-hidden flex items-center justify-center p-0.5 shadow-2xs">
+                        <div 
+                          onClick={() => setGalleryModalProduct(p)}
+                          className="relative group w-12 h-12 rounded-xl bg-slate-100 border border-slate-200 overflow-hidden flex items-center justify-center p-0.5 shadow-2xs cursor-pointer hover:border-sky-400"
+                          title="Klik untuk Kelola Galeri Foto (Bisa Tambah Lebih dari 1 Foto)"
+                        >
                           <img
                             src={imgSrc}
                             alt={p.official_name}
@@ -606,23 +674,16 @@ export default function ItemsManager({ adminToken, onStatsUpdated }) {
                               e.target.src = getProductPlaceholderSrc(p.brand, p.category, p.item_code);
                             }}
                           />
-                          <label 
-                            className="absolute inset-0 bg-slate-900/75 text-white opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center cursor-pointer transition-opacity text-[9px] font-bold text-center p-0.5"
-                            title="Ganti Foto Produk Ini Langsung"
-                          >
-                            <Camera className="w-3.5 h-3.5 mb-0.5 text-sky-400" />
-                            <span>Ganti</span>
-                            <input
-                              type="file"
-                              accept="image/*"
-                              className="hidden"
-                              onChange={(e) => {
-                                if (e.target.files && e.target.files[0]) {
-                                  handleFileUpload(e.target.files[0], p.item_code);
-                                }
-                              }}
-                            />
-                          </label>
+                          {/* Photo count indicator badge */}
+                          {Array.isArray(p.gallery_images) && p.gallery_images.length > 1 && (
+                            <span className="absolute bottom-0 right-0 bg-slate-900/85 text-white text-[9px] font-bold px-1 rounded-tl">
+                              {p.gallery_images.length}
+                            </span>
+                          )}
+                          <div className="absolute inset-0 bg-slate-900/75 text-white opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center transition-opacity text-[9px] font-bold text-center p-0.5">
+                            <Images className="w-3.5 h-3.5 mb-0.5 text-sky-400" />
+                            <span>Galeri</span>
+                          </div>
                         </div>
                       </td>
 
@@ -675,6 +736,19 @@ export default function ItemsManager({ adminToken, onStatsUpdated }) {
                       {/* Actions */}
                       <td className="py-3 px-4 text-right">
                         <div className="flex items-center justify-end gap-1.5">
+                          {/* Manage Gallery Button */}
+                          <button
+                            type="button"
+                            onClick={() => setGalleryModalProduct(p)}
+                            className="p-1.5 rounded-lg border border-slate-200 hover:border-sky-500 hover:text-sky-700 text-slate-600 transition flex items-center gap-1 cursor-pointer"
+                            title="Menu Kelola Galeri Foto (Bisa Tambah Lebih dari 1 Foto)"
+                          >
+                            <Images className="w-3.5 h-3.5 text-sky-600" />
+                            <span className="text-[10px] font-bold">
+                              {Array.isArray(p.gallery_images) && p.gallery_images.length > 0 ? `${p.gallery_images.length} Foto` : '+ Foto'}
+                            </span>
+                          </button>
+
                           <button
                             onClick={() => handleOpenEdit(p)}
                             className="p-1.5 rounded-lg border border-slate-200 hover:border-sky-500 hover:text-sky-700 text-slate-600 transition"
@@ -932,82 +1006,111 @@ export default function ItemsManager({ adminToken, onStatsUpdated }) {
                 </div>
               </div>
 
-              {/* SECTION: FOTO PRODUK LANGSUNG & LINK TOKO */}
+              {/* SECTION: FOTO PRODUK LANGSUNG & GALERI FOTO */}
               <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200/80 space-y-4">
-                <div className="flex items-center justify-between">
-                  <label className="block font-bold text-slate-800 text-xs sm:text-sm">
-                    14. Foto Produk (Upload Langsung dari Perangkat atau URL)
-                  </label>
-                  {formData.image_url && (
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <label className="block font-bold text-slate-800 text-xs sm:text-sm">
+                      14. Foto &amp; Galeri Produk (Bisa Tambah Lebih dari 1 Foto)
+                    </label>
+                    <span className="text-[11px] text-slate-500">
+                      {(formData.gallery_images?.length || (formData.image_url ? 1 : 0))} Foto tersimpan
+                    </span>
+                  </div>
+
+                  {modalMode === 'edit' && editingCode && (
                     <button
                       type="button"
-                      onClick={() => setFormData({ ...formData, image_url: '' })}
-                      className="text-[11px] text-rose-600 hover:text-rose-700 font-semibold flex items-center gap-1 transition"
+                      onClick={() => {
+                        const targetProd = products.find(p => p.item_code === editingCode) || { ...formData, item_code: editingCode };
+                        setGalleryModalProduct(targetProd);
+                      }}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-sky-600 hover:bg-sky-700 text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer"
                     >
-                      <Trash2 className="w-3.5 h-3.5" />
-                      <span>Hapus Foto</span>
+                      <Images className="w-3.5 h-3.5" />
+                      <span>Buka Menu Kelola Galeri</span>
                     </button>
                   )}
                 </div>
 
-                <div className="flex flex-col sm:flex-row items-center gap-4">
-                  {/* Photo Preview Box */}
-                  <div className="relative w-28 h-28 sm:w-32 sm:h-32 rounded-2xl bg-white border-2 border-slate-200 overflow-hidden shrink-0 flex items-center justify-center p-2 shadow-xs group">
-                    <img
-                      src={formData.image_url || getProductPlaceholderSrc(formData.brand, formData.category, formData.item_code)}
-                      alt="Preview Produk"
-                      className="w-full h-full object-contain"
-                      onError={(e) => {
-                        e.target.onerror = null;
-                        e.target.src = getProductPlaceholderSrc(formData.brand, formData.category, formData.item_code);
-                      }}
-                    />
-                    {uploadingImage && (
-                      <div className="absolute inset-0 bg-slate-900/70 backdrop-blur-xs flex flex-col items-center justify-center text-white text-[10px] font-bold gap-1">
-                        <RefreshCw className="w-5 h-5 animate-spin text-sky-400" />
-                        <span>Mengunggah...</span>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Upload Actions & URL input */}
-                  <div className="flex-1 space-y-2.5 w-full">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <label className="cursor-pointer inline-flex items-center gap-2 px-4 py-2 bg-sky-600 hover:bg-sky-700 text-white rounded-xl text-xs font-bold transition shadow-xs">
-                        <Camera className="w-4 h-4" />
-                        <span>{uploadingImage ? 'Mengunggah...' : 'Pilih Foto dari Perangkat'}</span>
-                        <input
-                          type="file"
-                          accept="image/*"
-                          disabled={uploadingImage}
-                          onChange={(e) => {
-                            if (e.target.files && e.target.files[0]) {
-                              handleFileUpload(e.target.files[0]);
-                            }
-                          }}
-                          className="hidden"
-                        />
-                      </label>
-
-                      <span className="text-[11px] text-slate-400">
-                        JPG, PNG, WebP (Maks 10MB)
-                      </span>
-                    </div>
-
-                    <div className="space-y-1">
-                      <input
-                        type="text"
-                        value={formData.image_url}
-                        onChange={e => setFormData({ ...formData, image_url: e.target.value })}
-                        placeholder="Atau tempel URL gambar eksternal (https://...)"
-                        className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500"
+                {/* Gallery Thumbnails List in Form */}
+                <div className="flex flex-wrap items-center gap-3">
+                  {(formData.gallery_images && formData.gallery_images.length > 0
+                    ? formData.gallery_images
+                    : (formData.image_url ? [formData.image_url] : [])
+                  ).map((imgUrl, idx) => (
+                    <div
+                      key={imgUrl + idx}
+                      className="relative w-20 h-20 rounded-xl bg-white border-2 border-slate-200 overflow-hidden flex items-center justify-center p-1 shadow-2xs group"
+                    >
+                      <img
+                        src={imgUrl}
+                        alt={`Foto ${idx + 1}`}
+                        className="w-full h-full object-contain"
+                        onError={(e) => { e.currentTarget.src = getProductPlaceholderSrc(formData.brand, formData.category, formData.item_code); }}
                       />
+                      {idx === 0 && (
+                        <span className="absolute top-1 left-1 bg-amber-500 text-white text-[8px] font-extrabold px-1 rounded shadow-xs">
+                          UTAMA
+                        </span>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const updated = (formData.gallery_images || []).filter(u => u !== imgUrl);
+                          setFormData({
+                            ...formData,
+                            gallery_images: updated,
+                            image_url: updated[0] || ''
+                          });
+                        }}
+                        className="absolute top-1 right-1 p-0.5 rounded bg-rose-600 text-white opacity-0 group-hover:opacity-100 transition shadow-xs cursor-pointer"
+                        title="Hapus foto ini"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </button>
                     </div>
-                    
-                    <p className="text-[10px] text-slate-500">
-                      Foto otomatis di-upload dan tersimpan di server lokal <code className="bg-slate-200 px-1 py-0.5 rounded text-slate-700">public/images/products/</code>
-                    </p>
-                  </div>
+                  ))}
+
+                  {/* Multi-upload Button Box */}
+                  <label className="cursor-pointer w-20 h-20 rounded-xl border-2 border-dashed border-slate-300 hover:border-sky-500 flex flex-col items-center justify-center text-slate-500 hover:text-sky-600 transition bg-white/70">
+                    <Plus className="w-5 h-5 mb-0.5" />
+                    <span className="text-[10px] font-bold text-center leading-tight">
+                      {uploadingImage ? '...' : '+ Foto'}
+                    </span>
+                    <input
+                      type="file"
+                      multiple
+                      accept="image/*"
+                      disabled={uploadingImage}
+                      onChange={(e) => {
+                        if (e.target.files) {
+                          handleMultiFileUploadInForm(e.target.files);
+                        }
+                      }}
+                      className="hidden"
+                    />
+                  </label>
+                </div>
+
+                <div className="space-y-1">
+                  <input
+                    type="text"
+                    value={formData.image_url}
+                    onChange={e => {
+                      const val = e.target.value;
+                      setFormData(prev => {
+                        let g = Array.isArray(prev.gallery_images) ? [...prev.gallery_images] : [];
+                        if (val && !g.includes(val)) g.unshift(val);
+                        return { ...prev, image_url: val, gallery_images: g };
+                      });
+                    }}
+                    placeholder="Atau tempel URL gambar eksternal (https://...)"
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500"
+                  />
+                  <p className="text-[10px] text-slate-500">
+                    Mendukung upload banyak file foto sekaligus dari komputer/ponsel. Foto pertama menjadi cover katalog.
+                  </p>
                 </div>
               </div>
 
@@ -1120,6 +1223,25 @@ export default function ItemsManager({ adminToken, onStatsUpdated }) {
           </div>
         </div>
       )}
+
+      {/* Product Gallery Modal (Menu Tambah Gambar Lebih dari 1) */}
+      <ProductGalleryModal
+        isOpen={!!galleryModalProduct}
+        onClose={() => setGalleryModalProduct(null)}
+        product={galleryModalProduct}
+        adminToken={adminToken}
+        onGalleryUpdated={(updated) => {
+          setGalleryModalProduct(updated);
+          setProducts(prev => prev.map(p => p.item_code === updated.item_code ? updated : p));
+          if (formData.item_code === updated.item_code) {
+            setFormData(prev => ({
+              ...prev,
+              image_url: updated.image_url,
+              gallery_images: updated.gallery_images
+            }));
+          }
+        }}
+      />
 
     </div>
   );

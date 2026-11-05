@@ -1,6 +1,9 @@
-import React, { useState } from 'react';
-import { X, ExternalLink, CheckCircle2, AlertCircle, Store, ShieldCheck, ArrowLeftRight } from 'lucide-react';
-import { getProductImageSrc, getProductPlaceholderSrc, getBrandTheme, formatRupiah } from '../utils/productUtils';
+import React, { useState, useEffect } from 'react';
+import { 
+  X, ExternalLink, CheckCircle2, AlertCircle, Store, ShieldCheck, 
+  ArrowLeftRight, ChevronLeft, ChevronRight, Images 
+} from 'lucide-react';
+import { getProductImageSrc, getProductPlaceholderSrc, getProductGalleryImages, getBrandTheme, formatRupiah } from '../utils/productUtils';
 
 export default function ProductDetailModal({
   isOpen,
@@ -10,13 +13,18 @@ export default function ProductDetailModal({
   isCompared = false,
   onToggleCompare
 }) {
-  const [imgError, setImgError] = useState(false);
+  const [activeImgIndex, setActiveImgIndex] = useState(0);
+
+  useEffect(() => {
+    setActiveImgIndex(0);
+  }, [product?.item_code, isOpen]);
 
   if (!isOpen || !product) return null;
 
   const theme = getBrandTheme(product.brand);
   const fallbackUrl = getProductPlaceholderSrc(product.brand, product.category, product.item_code);
-  const imgSrc = imgError ? fallbackUrl : getProductImageSrc(product);
+  const galleryImages = getProductGalleryImages(product);
+  const currentImgSrc = galleryImages[activeImgIndex] || fallbackUrl;
 
   const columnsData = [
     { label: '1. No & Kode Item', value: `${product.item_no || '-'} | ${product.item_code}` },
@@ -98,14 +106,71 @@ export default function ProductDetailModal({
             {/* Left Column: Image & Outlet Stock Card */}
             <div className="md:col-span-5 flex flex-col gap-4">
               
-              {/* Product Image */}
-              <div className="aspect-square bg-slate-50 rounded-xl border border-slate-200/80 p-4 flex items-center justify-center overflow-hidden">
-                <img
-                  src={imgSrc}
-                  alt={product.official_name}
-                  onError={() => setImgError(true)}
-                  className="w-full h-full object-contain"
-                />
+              {/* Interactive Product Image Slider & Gallery */}
+              <div className="flex flex-col gap-2">
+                <div className="relative aspect-square bg-slate-50 rounded-2xl border border-slate-200/80 p-4 flex items-center justify-center overflow-hidden group">
+                  <img
+                    src={currentImgSrc}
+                    alt={product.official_name}
+                    className="w-full h-full object-contain transition-all duration-200"
+                    onError={(e) => { e.currentTarget.src = fallbackUrl; }}
+                  />
+
+                  {/* Previous / Next Arrows (if > 1 image) */}
+                  {galleryImages.length > 1 && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => setActiveImgIndex((prev) => (prev > 0 ? prev - 1 : galleryImages.length - 1))}
+                        className="absolute left-2.5 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-white/90 hover:bg-white text-slate-700 shadow-md flex items-center justify-center transition opacity-80 hover:opacity-100 hover:scale-105 active:scale-95 cursor-pointer z-10"
+                        title="Foto sebelumnya"
+                      >
+                        <ChevronLeft className="w-5 h-5" />
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setActiveImgIndex((prev) => (prev < galleryImages.length - 1 ? prev + 1 : 0))}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-white/90 hover:bg-white text-slate-700 shadow-md flex items-center justify-center transition opacity-80 hover:opacity-100 hover:scale-105 active:scale-95 cursor-pointer z-10"
+                        title="Foto selanjutnya"
+                      >
+                        <ChevronRight className="w-5 h-5" />
+                      </button>
+
+                      {/* Photo Counter Indicator */}
+                      <div className="absolute bottom-2.5 left-1/2 -translate-x-1/2 bg-slate-900/80 text-white text-[10px] font-bold px-2.5 py-0.5 rounded-full backdrop-blur-xs flex items-center gap-1 shadow-sm pointer-events-none">
+                        <Images className="w-3 h-3 text-sky-400" />
+                        <span>Foto {activeImgIndex + 1} dari {galleryImages.length}</span>
+                      </div>
+                    </>
+                  )}
+                </div>
+
+                {/* Thumbnail Strip (if > 1 image) */}
+                {galleryImages.length > 1 && (
+                  <div className="flex items-center gap-2 overflow-x-auto pb-1 pt-0.5 px-0.5">
+                    {galleryImages.map((img, idx) => (
+                      <button
+                        key={img + idx}
+                        type="button"
+                        onClick={() => setActiveImgIndex(idx)}
+                        className={`relative w-14 h-14 rounded-xl border-2 overflow-hidden bg-slate-50 p-1 shrink-0 transition-all cursor-pointer ${
+                          activeImgIndex === idx
+                            ? 'border-sky-600 ring-2 ring-sky-500/30 scale-105 shadow-xs'
+                            : 'border-slate-200 hover:border-slate-300 opacity-60 hover:opacity-100'
+                        }`}
+                        title={`Lihat Foto ${idx + 1}`}
+                      >
+                        <img
+                          src={img}
+                          alt={`Thumbnail ${idx + 1}`}
+                          className="w-full h-full object-contain"
+                          onError={(e) => { e.currentTarget.src = fallbackUrl; }}
+                        />
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
 
               {/* Outlet Stock Card */}

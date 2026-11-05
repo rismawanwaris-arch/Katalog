@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { CheckCircle2, AlertCircle, Info, Eye, ArrowLeftRight } from 'lucide-react';
+import { CheckCircle2, AlertCircle, Info, Eye, ArrowLeftRight, Images } from 'lucide-react';
 import { getProductImageSrc, getProductPlaceholderSrc, getBrandTheme, formatRupiah } from '../utils/productUtils';
 
 function LazyProductImage({ src, fallbackUrl, alt }) {
@@ -92,6 +92,14 @@ export default function ProductCard({
           fallbackUrl={fallbackUrl}
           alt={product.official_name}
         />
+
+        {/* Multi-Photo Gallery Badge */}
+        {Array.isArray(product.gallery_images) && product.gallery_images.length > 1 && (
+          <div className="absolute bottom-2 right-2 bg-slate-900/80 text-white text-[10px] font-bold px-2 py-0.5 rounded-full backdrop-blur-xs flex items-center gap-1 shadow-sm z-10 pointer-events-none">
+            <Images className="w-3 h-3 text-sky-400" />
+            <span>{product.gallery_images.length} Foto</span>
+          </div>
+        )}
       </div>
 
       {/* Card Content */}

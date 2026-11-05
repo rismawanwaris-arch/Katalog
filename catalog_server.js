@@ -59,6 +59,7 @@ db.exec(`
     compatibility TEXT,
     color TEXT,
     image_url TEXT,
+    gallery_images TEXT DEFAULT '[]',
     official_store_url TEXT,
     price INTEGER DEFAULT 0,
     status_data TEXT DEFAULT 'Lengkap',
@@ -67,7 +68,7 @@ db.exec(`
   );
 `);
 
-// Auto-migrate price column if missing in existing database
+// Auto-migrate price & gallery_images columns if missing in existing database
 try {
   const pragma = db.prepare('PRAGMA table_info(products)').all();
   const hasPrice = pragma.some(c => c.name === 'price');
@@ -75,8 +76,14 @@ try {
     db.exec('ALTER TABLE products ADD COLUMN price INTEGER DEFAULT 0;');
     console.log('[Database] Kolom "price" berhasil ditambahkan ke tabel products.');
   }
+
+  const hasGallery = pragma.some(c => c.name === 'gallery_images');
+  if (!hasGallery) {
+    db.exec("ALTER TABLE products ADD COLUMN gallery_images TEXT DEFAULT '[]';");
+    console.log('[Database] Kolom "gallery_images" berhasil ditambahkan ke tabel products.');
+  }
 } catch (e) {
-  console.error('[Database] Error checking/adding price column:', e.message);
+  console.error('[Database] Error checking/adding columns:', e.message);
 }
 
 // Initialize users table
@@ -473,6 +480,25 @@ function getSortOrderClause(sort) {
   }
 }
 
+function parseGalleryImages(rawGallery, primaryImage) {
+  let list = [];
+  if (Array.isArray(rawGallery)) {
+    list = rawGallery;
+  } else if (typeof rawGallery === 'string') {
+    try {
+      list = JSON.parse(rawGallery);
+    } catch (e) {
+      list = rawGallery ? [rawGallery] : [];
+    }
+  }
+  if (!Array.isArray(list)) list = [];
+  list = list.map(s => String(s || '').trim()).filter(Boolean);
+  if (primaryImage && !list.includes(primaryImage)) {
+    list.unshift(primaryImage);
+  }
+  return list;
+}
+
 const server = http.createServer(async (req, res) => {
   // CORS Headers
   if (req.method === 'OPTIONS') {
@@ -594,9 +620,12 @@ const server = http.createServer(async (req, res) => {
           finalImage = p.image_url;
         }
 
+        const gallery = parseGalleryImages(p.gallery_images, finalImage);
+
         return {
           ...p,
           image_url: finalImage,
+          gallery_images: gallery,
           outletStock,
           hasStockInOutlet: outletStock > 0,
           totalNetworkStock,
@@ -671,11 +700,14 @@ const server = http.createServer(async (req, res) => {
       finalImage = product.image_url;
     }
 
+    const gallery = parseGalleryImages(product.gallery_images, finalImage);
+
     return sendJson(req, res, 200, {
       success: true,
       product: {
         ...product,
         image_url: finalImage,
+        gallery_images: gallery,
         selectedOutlet,
         outletStock,
         hasStockInOutlet: outletStock > 0,
@@ -734,18 +766,21 @@ const server = http.createServer(async (req, res) => {
           item_no, item_code, item_name, item_alias, barcode,
           brand, category, official_sku, official_name,
           main_spec, detail_spec, interface, compatibility,
-          color, image_url, official_store_url, price, status_data,
+          color, image_url, gallery_images, official_store_url, price, status_data,
           created_at, updated_at
         ) VALUES (
           ?, ?, ?, ?, ?,
           ?, ?, ?, ?,
           ?, ?, ?, ?,
-          ?, ?, ?, ?, ?,
+          ?, ?, ?, ?, ?, ?,
           ?, ?
         )
       `);
 
       const priceVal = parseInt(b.price, 10) || 0;
+      const galleryVal = Array.isArray(b.gallery_images)
+        ? JSON.stringify(b.gallery_images)
+        : (typeof b.gallery_images === 'string' ? b.gallery_images : '[]');
 
       stmt.run(
         nextNo,
@@ -763,6 +798,7 @@ const server = http.createServer(async (req, res) => {
         b.compatibility || '',
         b.color || '',
         b.image_url || '',
+        galleryVal,
         b.official_store_url || '',
         priceVal,
         b.status_data || 'Lengkap',
@@ -799,16 +835,26 @@ const server = http.createServer(async (req, res) => {
           item_name = ?, item_alias = ?, barcode = ?,
           brand = ?, category = ?, official_sku = ?, official_name = ?,
           main_spec = ?, detail_spec = ?, interface = ?, compatibility = ?,
-          color = ?, image_url = ?, official_store_url = ?, price = ?, status_data = ?,
+          color = ?, image_url = ?, gallery_images = ?, official_store_url = ?, price = ?, status_data = ?,
           updated_at = ?
         WHERE item_code = ?
       `);
+
+      let galleryVal = '[]';
+      if (b.gallery_images !== undefined) {
+        galleryVal = Array.isArray(b.gallery_images)
+          ? JSON.stringify(b.gallery_images)
+          : (typeof b.gallery_images === 'string' ? b.gallery_images : '[]');
+      } else {
+        const existing = db.prepare('SELECT gallery_images FROM products WHERE item_code = ?').get(code);
+        galleryVal = existing?.gallery_images || '[]';
+      }
 
       stmt.run(
         b.item_name, b.item_alias, b.barcode,
         b.brand, b.category, b.official_sku, b.official_name,
         b.main_spec, b.detail_spec, b.interface, b.compatibility,
-        b.color, b.image_url, b.official_store_url, priceVal, b.status_data,
+        b.color, b.image_url, galleryVal, b.official_store_url, priceVal, b.status_data,
         now,
         code
       );
@@ -919,10 +965,20 @@ const server = http.createServer(async (req, res) => {
 
       const publicImageUrl = `/images/products/${uniqueFileName}`;
 
-      // If itemCode was provided and product exists in database, auto-update image_url
+      // If itemCode was provided and product exists in database, auto-update image_url & gallery_images
       if (itemCode) {
         const now = new Date().toISOString();
-        db.prepare('UPDATE products SET image_url = ?, updated_at = ? WHERE item_code = ?').run(publicImageUrl, now, itemCode);
+        const pRow = db.prepare('SELECT image_url, gallery_images FROM products WHERE item_code = ?').get(itemCode);
+        let gallery = [];
+        try {
+          gallery = pRow?.gallery_images ? JSON.parse(pRow.gallery_images) : [];
+        } catch (e) { gallery = []; }
+        if (!Array.isArray(gallery)) gallery = [];
+        if (!gallery.includes(publicImageUrl)) {
+          gallery.push(publicImageUrl);
+        }
+        db.prepare('UPDATE products SET image_url = ?, gallery_images = ?, updated_at = ? WHERE item_code = ?')
+          .run(publicImageUrl, JSON.stringify(gallery), now, itemCode);
         logActivity('admin', 'Administrator Utama', 'IMAGE_UPLOAD', 'CATALOG', `Mengunggah foto produk langsung untuk [${itemCode}]`, { itemCode, file: uniqueFileName }, req);
       }
 
@@ -934,6 +990,238 @@ const server = http.createServer(async (req, res) => {
     } catch (err) {
       console.error('Error uploading image:', err);
       return sendJson(req, res, 500, { success: false, message: 'Gagal mengunggah foto: ' + err.message });
+    }
+  }
+
+  function saveBase64Image(cleanCode, imageBase64, fileName, idx = 0) {
+    let ext = '.jpg';
+    if (imageBase64.startsWith('data:image/png')) ext = '.png';
+    else if (imageBase64.startsWith('data:image/webp')) ext = '.webp';
+    else if (imageBase64.startsWith('data:image/gif')) ext = '.gif';
+    else if (fileName) {
+      const fileExt = path.extname(fileName).toLowerCase();
+      if (['.jpg', '.jpeg', '.png', '.webp', '.gif'].includes(fileExt)) {
+        ext = fileExt === '.jpeg' ? '.jpg' : fileExt;
+      }
+    }
+
+    const uploadDir = path.join(__dirname, 'public', 'images', 'products');
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true });
+    }
+
+    const uniqueFileName = `${cleanCode}_${Date.now()}_${idx}${ext}`;
+    const destPath = path.join(uploadDir, uniqueFileName);
+    const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, '');
+    const buffer = Buffer.from(base64Data, 'base64');
+    fs.writeFileSync(destPath, buffer);
+    return `/images/products/${uniqueFileName}`;
+  }
+
+  // POST /api/admin/products/:code/gallery (Add one or more images to product gallery)
+  if (req.method === 'POST' && pathname.startsWith('/api/admin/products/') && pathname.endsWith('/gallery')) {
+    try {
+      const auth = req.headers['authorization'] || '';
+      if (!auth.includes('auth-token-admin')) {
+        return sendJson(req, res, 403, { success: false, message: 'Akses ditolak. Silakan login sebagai Admin.' });
+      }
+
+      const code = decodeURIComponent(pathname.replace('/api/admin/products/', '').replace('/gallery', ''));
+      const product = db.prepare('SELECT * FROM products WHERE item_code = ?').get(code);
+      if (!product) {
+        return sendJson(req, res, 404, { success: false, message: 'Produk tidak ditemukan' });
+      }
+
+      const body = await parseJsonBody(req);
+      const cleanCode = code.replace(/[^a-zA-Z0-9_-]/g, '');
+
+      let currentGallery = parseGalleryImages(product.gallery_images, product.image_url);
+      const addedUrls = [];
+
+      if (Array.isArray(body.images)) {
+        for (let i = 0; i < body.images.length; i++) {
+          const item = body.images[i];
+          if (item.imageBase64) {
+            const url = saveBase64Image(cleanCode, item.imageBase64, item.fileName, i + 1);
+            addedUrls.push(url);
+          } else if (item.url) {
+            addedUrls.push(item.url.trim());
+          }
+        }
+      } else if (body.imageBase64) {
+        const url = saveBase64Image(cleanCode, body.imageBase64, body.fileName, 1);
+        addedUrls.push(url);
+      } else if (body.imageUrl) {
+        addedUrls.push(body.imageUrl.trim());
+      }
+
+      if (addedUrls.length === 0) {
+        return sendJson(req, res, 400, { success: false, message: 'Tidak ada gambar yang valid untuk ditambahkan' });
+      }
+
+      addedUrls.forEach(u => {
+        if (!currentGallery.includes(u)) {
+          currentGallery.push(u);
+        }
+      });
+
+      const now = new Date().toISOString();
+      let primaryImage = product.image_url;
+      if (!primaryImage || primaryImage.includes('images.tokopedia.net') || primaryImage.includes('placehold.co')) {
+        primaryImage = currentGallery[0] || '';
+      }
+
+      db.prepare('UPDATE products SET gallery_images = ?, image_url = ?, updated_at = ? WHERE item_code = ?')
+        .run(JSON.stringify(currentGallery), primaryImage, now, code);
+
+      logActivity('admin', 'Administrator Utama', 'GALLERY_ADD', 'CATALOG', `Menambahkan ${addedUrls.length} foto ke galeri produk [${code}]`, { code, addedCount: addedUrls.length }, req);
+
+      return sendJson(req, res, 200, {
+        success: true,
+        message: `Berhasil menambahkan ${addedUrls.length} foto ke galeri produk.`,
+        gallery_images: currentGallery,
+        primaryImage
+      });
+    } catch (err) {
+      console.error('Error adding to gallery:', err);
+      return sendJson(req, res, 500, { success: false, message: 'Gagal menambah foto ke galeri: ' + err.message });
+    }
+  }
+
+  // DELETE /api/admin/products/:code/gallery (Remove image from gallery)
+  if (req.method === 'DELETE' && pathname.startsWith('/api/admin/products/') && pathname.endsWith('/gallery')) {
+    try {
+      const auth = req.headers['authorization'] || '';
+      if (!auth.includes('auth-token-admin')) {
+        return sendJson(req, res, 403, { success: false, message: 'Akses ditolak. Silakan login sebagai Admin.' });
+      }
+
+      const code = decodeURIComponent(pathname.replace('/api/admin/products/', '').replace('/gallery', ''));
+      const product = db.prepare('SELECT * FROM products WHERE item_code = ?').get(code);
+      if (!product) {
+        return sendJson(req, res, 404, { success: false, message: 'Produk tidak ditemukan' });
+      }
+
+      const body = await parseJsonBody(req);
+      const targetUrl = (body.imageUrl || '').trim();
+      if (!targetUrl) {
+        return sendJson(req, res, 400, { success: false, message: 'URL foto yang akan dihapus wajib diisi!' });
+      }
+
+      let currentGallery = parseGalleryImages(product.gallery_images, product.image_url);
+      currentGallery = currentGallery.filter(u => u !== targetUrl);
+
+      let primaryImage = product.image_url;
+      if (primaryImage === targetUrl) {
+        primaryImage = currentGallery[0] || '';
+      }
+
+      const now = new Date().toISOString();
+      db.prepare('UPDATE products SET gallery_images = ?, image_url = ?, updated_at = ? WHERE item_code = ?')
+        .run(JSON.stringify(currentGallery), primaryImage, now, code);
+
+      if (targetUrl.startsWith('/images/products/')) {
+        const fileName = path.basename(targetUrl);
+        const filePath = path.join(__dirname, 'public', 'images', 'products', fileName);
+        if (fs.existsSync(filePath)) {
+          try { fs.unlinkSync(filePath); } catch (e) {}
+        }
+      }
+
+      logActivity('admin', 'Administrator Utama', 'GALLERY_DELETE', 'CATALOG', `Menghapus foto dari galeri produk [${code}]`, { code, removed: targetUrl }, req);
+
+      return sendJson(req, res, 200, {
+        success: true,
+        message: 'Foto berhasil dihapus dari galeri.',
+        gallery_images: currentGallery,
+        primaryImage
+      });
+    } catch (err) {
+      console.error('Error deleting from gallery:', err);
+      return sendJson(req, res, 500, { success: false, message: 'Gagal menghapus foto: ' + err.message });
+    }
+  }
+
+  // PUT /api/admin/products/:code/gallery/primary (Set photo as cover/primary image)
+  if (req.method === 'PUT' && pathname.startsWith('/api/admin/products/') && pathname.endsWith('/gallery/primary')) {
+    try {
+      const auth = req.headers['authorization'] || '';
+      if (!auth.includes('auth-token-admin')) {
+        return sendJson(req, res, 403, { success: false, message: 'Akses ditolak. Silakan login sebagai Admin.' });
+      }
+
+      const code = decodeURIComponent(pathname.replace('/api/admin/products/', '').replace('/gallery/primary', ''));
+      const product = db.prepare('SELECT * FROM products WHERE item_code = ?').get(code);
+      if (!product) {
+        return sendJson(req, res, 404, { success: false, message: 'Produk tidak ditemukan' });
+      }
+
+      const body = await parseJsonBody(req);
+      const targetUrl = (body.imageUrl || '').trim();
+      if (!targetUrl) {
+        return sendJson(req, res, 400, { success: false, message: 'URL foto utama wajib diisi!' });
+      }
+
+      let currentGallery = parseGalleryImages(product.gallery_images, product.image_url);
+      if (!currentGallery.includes(targetUrl)) {
+        currentGallery.push(targetUrl);
+      }
+      currentGallery = [targetUrl, ...currentGallery.filter(u => u !== targetUrl)];
+
+      const now = new Date().toISOString();
+      db.prepare('UPDATE products SET image_url = ?, gallery_images = ?, updated_at = ? WHERE item_code = ?')
+        .run(targetUrl, JSON.stringify(currentGallery), now, code);
+
+      logActivity('admin', 'Administrator Utama', 'GALLERY_SET_PRIMARY', 'CATALOG', `Mengatur foto utama produk [${code}]`, { code, primary: targetUrl }, req);
+
+      return sendJson(req, res, 200, {
+        success: true,
+        message: 'Foto utama berhasil diperbarui.',
+        gallery_images: currentGallery,
+        primaryImage: targetUrl
+      });
+    } catch (err) {
+      console.error('Error setting primary photo:', err);
+      return sendJson(req, res, 500, { success: false, message: 'Gagal mengatur foto utama: ' + err.message });
+    }
+  }
+
+  // PUT /api/admin/products/:code/gallery/reorder (Save new order of gallery images)
+  if (req.method === 'PUT' && pathname.startsWith('/api/admin/products/') && pathname.endsWith('/gallery/reorder')) {
+    try {
+      const auth = req.headers['authorization'] || '';
+      if (!auth.includes('auth-token-admin')) {
+        return sendJson(req, res, 403, { success: false, message: 'Akses ditolak. Silakan login sebagai Admin.' });
+      }
+
+      const code = decodeURIComponent(pathname.replace('/api/admin/products/', '').replace('/gallery/reorder', ''));
+      const product = db.prepare('SELECT * FROM products WHERE item_code = ?').get(code);
+      if (!product) {
+        return sendJson(req, res, 404, { success: false, message: 'Produk tidak ditemukan' });
+      }
+
+      const body = await parseJsonBody(req);
+      const { images } = body;
+      if (!Array.isArray(images) || images.length === 0) {
+        return sendJson(req, res, 400, { success: false, message: 'Daftar urutan gambar wajib disertakan!' });
+      }
+
+      const now = new Date().toISOString();
+      const primaryImage = images[0] || '';
+      db.prepare('UPDATE products SET gallery_images = ?, image_url = ?, updated_at = ? WHERE item_code = ?')
+        .run(JSON.stringify(images), primaryImage, now, code);
+
+      logActivity('admin', 'Administrator Utama', 'GALLERY_REORDER', 'CATALOG', `Mengubah urutan galeri foto produk [${code}]`, { code, count: images.length }, req);
+
+      return sendJson(req, res, 200, {
+        success: true,
+        message: 'Urutan galeri foto berhasil disimpan.',
+        gallery_images: images,
+        primaryImage
+      });
+    } catch (err) {
+      console.error('Error reordering gallery:', err);
+      return sendJson(req, res, 500, { success: false, message: 'Gagal mengubah urutan foto: ' + err.message });
     }
   }
 
