@@ -178,6 +178,73 @@ try {
   }
 } catch (e) {}
 
+// Auto-sync product photos from public/images/products on startup
+function autoSyncLocalProductImages() {
+  const imagesDir = path.join(__dirname, 'public', 'images', 'products');
+  if (!fs.existsSync(imagesDir)) return;
+
+  try {
+    const files = fs.readdirSync(imagesDir);
+    const productImagesMap = new Map();
+
+    files.forEach(file => {
+      const match = file.match(/^([A-Za-z0-9_-]+?)(?:_(\d+))?\.(jpe?g|png|webp)$/i);
+      if (!match) return;
+      const itemCode = match[1];
+      const index = match[2] ? parseInt(match[2], 10) : 1;
+
+      if (!productImagesMap.has(itemCode)) {
+        productImagesMap.set(itemCode, []);
+      }
+      productImagesMap.get(itemCode).push({
+        url: `/images/products/${file}`,
+        order: index
+      });
+    });
+
+    if (productImagesMap.size === 0) return;
+
+    const products = db.prepare('SELECT id, item_code, image_url, gallery_images FROM products').all();
+    const updateStmt = db.prepare('UPDATE products SET image_url = ?, gallery_images = ?, updated_at = ? WHERE item_code = ?');
+    const now = new Date().toISOString();
+    let syncedCount = 0;
+
+    for (const p of products) {
+      const localImages = productImagesMap.get(p.item_code);
+      if (!localImages || localImages.length === 0) continue;
+
+      localImages.sort((a, b) => a.order - b.order);
+      const galleryUrls = localImages.map(img => img.url);
+      const primaryUrl = galleryUrls[0];
+
+      let currentGallery = [];
+      try {
+        currentGallery = JSON.parse(p.gallery_images || '[]');
+      } catch (e) {
+        currentGallery = [];
+      }
+
+      const hasInvalidImage = !p.image_url || p.image_url === '/images/no-image.png' || p.image_url.trim() === '';
+      const hasEmptyGallery = !currentGallery || currentGallery.length === 0;
+      const hasMoreLocalPhotos = galleryUrls.length > currentGallery.length;
+
+      if (hasInvalidImage || hasEmptyGallery || hasMoreLocalPhotos) {
+        const finalPrimary = (!hasInvalidImage && p.image_url) ? p.image_url : primaryUrl;
+        updateStmt.run(finalPrimary, JSON.stringify(galleryUrls), now, p.item_code);
+        syncedCount++;
+      }
+    }
+
+    if (syncedCount > 0) {
+      console.log(`[Auto-Sync] Berhasil mensinkronisasi foto produk lokal untuk ${syncedCount} produk.`);
+    }
+  } catch (err) {
+    console.error('[Auto-Sync] Error syncing local product images:', err.message);
+  }
+}
+
+autoSyncLocalProductImages();
+
 // Helper to normalize and simplify cable and charger categories automatically
 function normalizeProductCategory(p) {
   const currentCat = p.category || '';
