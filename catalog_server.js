@@ -611,23 +611,89 @@ const server = http.createServer(async (req, res) => {
 
   // 2B. GET /api/promo (Public Promo Popup & Poster)
   if (req.method === 'GET' && pathname === '/api/promo') {
+    const selectedOutlet = (parsedUrl.searchParams.get('outlet') || '').trim();
     const enabled = getSetting('promo_popup_enabled', 'true') === 'true';
-    const title = getSetting('promo_popup_title', 'PROMO SPESIAL HARI INI');
+    const mode = getSetting('promo_popup_mode', 'both'); // 'products', 'banner', 'both'
+    const badge = getSetting('promo_popup_badge', 'PROMO SPESIAL');
+    const title = getSetting('promo_popup_title', 'PROMO AKSESORIS PILIHAN');
     const subtitle = getSetting('promo_popup_subtitle', 'Temukan berbagai aksesoris gadget pilihan dengan penawaran dan ketersediaan stok terbaik di 43 cabang kami!');
     const imageUrl = getSetting('promo_popup_image', '');
     const actionText = getSetting('promo_popup_action_text', 'Mulai Belanja & Cek Stok');
     const actionFilter = getSetting('promo_popup_action_filter', '');
     const updatedAt = getSetting('promo_popup_updated_at', new Date().toISOString());
 
+    let rawProducts = [];
+    try {
+      rawProducts = JSON.parse(getSetting('promo_popup_products', '[]'));
+    } catch (e) {
+      rawProducts = [];
+    }
+
+    // Default sample items from DB if empty
+    let promoItems = [];
+    if (Array.isArray(rawProducts) && rawProducts.length > 0) {
+      promoItems = rawProducts;
+    } else {
+      const defaultProducts = db.prepare('SELECT item_code, official_name, price, brand FROM products WHERE image_url IS NOT NULL AND price > 0 LIMIT 3').all();
+      promoItems = defaultProducts.map((p, idx) => ({
+        item_code: p.item_code,
+        promo_badge: idx === 0 ? 'Best Seller' : (idx === 1 ? 'Diskon 20%' : 'Rekomendasi'),
+        promo_price: p.price > 0 ? Math.round(p.price * 0.85 / 1000) * 1000 : 0
+      }));
+    }
+
+    // Hydrate product details
+    const hydratedProducts = [];
+    for (const item of promoItems) {
+      const code = typeof item === 'string' ? item : item.item_code;
+      if (!code) continue;
+      const p = db.prepare('SELECT * FROM products WHERE item_code = ?').get(code);
+      if (!p) continue;
+
+      const itemStocks = stockCache[p.item_code] || {};
+      let outletStock = 0;
+      let totalNetworkStock = 0;
+      Object.entries(itemStocks).forEach(([outName, qty]) => {
+        const num = parseInt(qty, 10) || 0;
+        totalNetworkStock += num;
+        if (selectedOutlet && outName === selectedOutlet) {
+          outletStock = num;
+        }
+      });
+
+      const localJpg = path.join(__dirname, 'public', 'images', 'products', `${p.item_code}.jpg`);
+      const localPng = path.join(__dirname, 'public', 'images', 'products', `${p.item_code}.png`);
+      let finalImg = p.image_url || '';
+      if (fs.existsSync(localJpg)) finalImg = `/images/products/${p.item_code}.jpg`;
+      else if (fs.existsSync(localPng)) finalImg = `/images/products/${p.item_code}.png`;
+
+      hydratedProducts.push({
+        item_code: p.item_code,
+        official_name: p.official_name,
+        brand: p.brand,
+        category: p.category,
+        price: p.price || 0,
+        promo_price: item.promo_price || (p.price > 0 ? Math.round(p.price * 0.85 / 1000) * 1000 : 0),
+        promo_badge: item.promo_badge || 'Promo',
+        image_url: finalImg,
+        outletStock,
+        totalNetworkStock
+      });
+    }
+
     return sendJson(req, res, 200, {
       success: true,
       promo: {
         enabled,
+        mode,
+        badge,
         title,
         subtitle,
         imageUrl,
         actionText,
         actionFilter,
+        products: hydratedProducts,
+        rawProductItems: promoItems,
         updatedAt
       }
     });
@@ -1108,31 +1174,29 @@ const server = http.createServer(async (req, res) => {
       }
 
       const body = await parseJsonBody(req);
-      const { enabled, title, subtitle, imageUrl, actionText, actionFilter } = body;
+      const { enabled, mode, badge, title, subtitle, imageUrl, actionText, actionFilter, products } = body;
 
       if (enabled !== undefined) setSetting('promo_popup_enabled', enabled ? 'true' : 'false');
+      if (mode !== undefined) setSetting('promo_popup_mode', String(mode).trim());
+      if (badge !== undefined) setSetting('promo_popup_badge', String(badge).trim());
       if (title !== undefined) setSetting('promo_popup_title', String(title).trim());
       if (subtitle !== undefined) setSetting('promo_popup_subtitle', String(subtitle).trim());
       if (imageUrl !== undefined) setSetting('promo_popup_image', String(imageUrl).trim());
       if (actionText !== undefined) setSetting('promo_popup_action_text', String(actionText).trim());
       if (actionFilter !== undefined) setSetting('promo_popup_action_filter', String(actionFilter).trim());
+      if (products !== undefined) {
+        setSetting('promo_popup_products', typeof products === 'string' ? products : JSON.stringify(products));
+      }
+
       const now = new Date().toISOString();
       setSetting('promo_popup_updated_at', now);
 
-      logActivity('admin', 'Administrator Utama', 'PROMO_UPDATE', 'PROMO', 'Memperbarui pengaturan poster promo popup', { enabled, title }, req);
+      logActivity('admin', 'Administrator Utama', 'PROMO_UPDATE', 'PROMO', 'Memperbarui pengaturan banner & produk pilihan promo popup', { enabled, title, mode }, req);
 
       return sendJson(req, res, 200, {
         success: true,
         message: 'Pengaturan promo popup berhasil disimpan',
-        promo: {
-          enabled: getSetting('promo_popup_enabled', 'true') === 'true',
-          title: getSetting('promo_popup_title', 'PROMO SPESIAL HARI INI'),
-          subtitle: getSetting('promo_popup_subtitle', ''),
-          imageUrl: getSetting('promo_popup_image', ''),
-          actionText: getSetting('promo_popup_action_text', 'Mulai Belanja & Cek Stok'),
-          actionFilter: getSetting('promo_popup_action_filter', ''),
-          updatedAt: now
-        }
+        updatedAt: now
       });
     } catch (err) {
       console.error('Error updating promo settings:', err);

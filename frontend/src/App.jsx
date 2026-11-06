@@ -63,11 +63,12 @@ export default function App() {
   const [promoData, setPromoData] = useState(null);
   const [isPromoOpen, setIsPromoOpen] = useState(false);
 
-  // Load Promo Settings on Mount
+  // Load Promo Settings on Mount & when currentStore changes
   useEffect(() => {
     async function fetchPromo() {
       try {
-        const res = await fetch('/api/promo');
+        const url = '/api/promo' + (currentStore ? `?outlet=${encodeURIComponent(currentStore)}` : '');
+        const res = await fetch(url);
         const data = await res.json();
         if (data.success && data.promo) {
           setPromoData(data.promo);
@@ -86,7 +87,7 @@ export default function App() {
       }
     }
     fetchPromo();
-  }, []);
+  }, [currentStore]);
 
   function handlePromoAction(promo) {
     if (promo && promo.actionFilter && promo.actionFilter.trim()) {
@@ -491,6 +492,8 @@ export default function App() {
         onClose={() => setIsPromoOpen(false)}
         promo={promoData}
         onActionClick={handlePromoAction}
+        onSelectProduct={handleOpenDetail}
+        currentStore={currentStore}
       />
 
     </div>
