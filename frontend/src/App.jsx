@@ -5,6 +5,7 @@ import CategorySidebar from './components/CategorySidebar';
 import ProductCard from './components/ProductCard';
 import ProductDetailModal from './components/ProductDetailModal';
 import ProductCompareModal from './components/ProductCompareModal';
+import PromoModal from './components/PromoModal';
 import CompareFloatingBar from './components/CompareFloatingBar';
 import StoreModal from './components/StoreModal';
 import AdminDashboard from './components/admin/AdminDashboard';
@@ -59,6 +60,40 @@ export default function App() {
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [comparedProducts, setComparedProducts] = useState([]);
   const [isCompareModalOpen, setIsCompareModalOpen] = useState(false);
+  const [promoData, setPromoData] = useState(null);
+  const [isPromoOpen, setIsPromoOpen] = useState(false);
+
+  // Load Promo Settings on Mount
+  useEffect(() => {
+    async function fetchPromo() {
+      try {
+        const res = await fetch('/api/promo');
+        const data = await res.json();
+        if (data.success && data.promo) {
+          setPromoData(data.promo);
+          if (data.promo.enabled && window.location.hash !== '#admin') {
+            const dismissedDate = localStorage.getItem('katalog_promo_dismissed_date');
+            const todayStr = new Date().toISOString().slice(0, 10);
+            if (dismissedDate !== todayStr) {
+              setTimeout(() => {
+                setIsPromoOpen(true);
+              }, 500);
+            }
+          }
+        }
+      } catch (err) {
+        console.error('Error fetching promo:', err);
+      }
+    }
+    fetchPromo();
+  }, []);
+
+  function handlePromoAction(promo) {
+    if (promo && promo.actionFilter && promo.actionFilter.trim()) {
+      setSearchQuery(promo.actionFilter.trim());
+    }
+    window.scrollTo({ top: 120, behavior: 'smooth' });
+  }
 
   // Sync hash with viewMode
   useEffect(() => {
@@ -273,6 +308,8 @@ export default function App() {
         reportDate={reportDate}
         comparedCount={comparedProducts.length}
         onOpenCompare={handleOpenCompareModal}
+        hasPromo={Boolean(promoData?.enabled)}
+        onOpenPromo={() => setIsPromoOpen(true)}
       />
 
       {/* Main Container */}
@@ -446,6 +483,14 @@ export default function App() {
         onClearAll={handleClearCompare}
         currentStore={currentStore}
         onOpenDetail={handleOpenDetail}
+      />
+
+      {/* Promo Poster / Popup Modal */}
+      <PromoModal
+        isOpen={isPromoOpen}
+        onClose={() => setIsPromoOpen(false)}
+        promo={promoData}
+        onActionClick={handlePromoAction}
       />
 
     </div>

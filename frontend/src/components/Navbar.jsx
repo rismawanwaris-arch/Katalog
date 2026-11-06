@@ -1,5 +1,5 @@
 import React from 'react';
-import { MapPin, Lock, LogOut, PlusCircle, RefreshCw, Smartphone, ArrowLeftRight } from 'lucide-react';
+import { MapPin, Lock, LogOut, PlusCircle, RefreshCw, Smartphone, ArrowLeftRight, Sparkles } from 'lucide-react';
 
 export default function Navbar({
   currentStore,
@@ -10,7 +10,9 @@ export default function Navbar({
   onTriggerSync,
   reportDate,
   comparedCount = 0,
-  onOpenCompare
+  onOpenCompare,
+  hasPromo = false,
+  onOpenPromo
 }) {
   return (
     <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-sm transition-all">
@@ -47,6 +49,18 @@ export default function Navbar({
                 <span className="bg-white text-sky-800 text-[10px] font-black px-1.5 py-0.5 rounded-full">
                   {comparedCount}
                 </span>
+              </button>
+            )}
+
+            {/* Promo Popup Reopen Button */}
+            {hasPromo && (
+              <button
+                onClick={onOpenPromo}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-full bg-amber-50 hover:bg-amber-100 border border-amber-300/80 text-amber-900 text-xs sm:text-sm font-bold transition-all duration-150 active:scale-95 shadow-sm cursor-pointer"
+                title="Lihat Promo & Poster Spesial"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-amber-600 animate-pulse" />
+                <span className="hidden xs:inline">Promo</span>
               </button>
             )}
 

@@ -609,6 +609,30 @@ const server = http.createServer(async (req, res) => {
     });
   }
 
+  // 2B. GET /api/promo (Public Promo Popup & Poster)
+  if (req.method === 'GET' && pathname === '/api/promo') {
+    const enabled = getSetting('promo_popup_enabled', 'true') === 'true';
+    const title = getSetting('promo_popup_title', 'PROMO SPESIAL HARI INI');
+    const subtitle = getSetting('promo_popup_subtitle', 'Temukan berbagai aksesoris gadget pilihan dengan penawaran dan ketersediaan stok terbaik di 43 cabang kami!');
+    const imageUrl = getSetting('promo_popup_image', '');
+    const actionText = getSetting('promo_popup_action_text', 'Mulai Belanja & Cek Stok');
+    const actionFilter = getSetting('promo_popup_action_filter', '');
+    const updatedAt = getSetting('promo_popup_updated_at', new Date().toISOString());
+
+    return sendJson(req, res, 200, {
+      success: true,
+      promo: {
+        enabled,
+        title,
+        subtitle,
+        imageUrl,
+        actionText,
+        actionFilter,
+        updatedAt
+      }
+    });
+  }
+
   // 3. GET /api/products
   if (req.method === 'GET' && pathname === '/api/products') {
     try {
@@ -1072,6 +1096,97 @@ const server = http.createServer(async (req, res) => {
     } catch (err) {
       console.error('Error uploading image:', err);
       return sendJson(req, res, 500, { success: false, message: 'Gagal mengunggah foto: ' + err.message });
+    }
+  }
+
+  // PUT /api/admin/promo (Update promo popup settings)
+  if (req.method === 'PUT' && pathname === '/api/admin/promo') {
+    try {
+      const auth = req.headers['authorization'] || '';
+      if (!auth.includes('auth-token-admin')) {
+        return sendJson(req, res, 403, { success: false, message: 'Akses ditolak. Silakan login sebagai Admin.' });
+      }
+
+      const body = await parseJsonBody(req);
+      const { enabled, title, subtitle, imageUrl, actionText, actionFilter } = body;
+
+      if (enabled !== undefined) setSetting('promo_popup_enabled', enabled ? 'true' : 'false');
+      if (title !== undefined) setSetting('promo_popup_title', String(title).trim());
+      if (subtitle !== undefined) setSetting('promo_popup_subtitle', String(subtitle).trim());
+      if (imageUrl !== undefined) setSetting('promo_popup_image', String(imageUrl).trim());
+      if (actionText !== undefined) setSetting('promo_popup_action_text', String(actionText).trim());
+      if (actionFilter !== undefined) setSetting('promo_popup_action_filter', String(actionFilter).trim());
+      const now = new Date().toISOString();
+      setSetting('promo_popup_updated_at', now);
+
+      logActivity('admin', 'Administrator Utama', 'PROMO_UPDATE', 'PROMO', 'Memperbarui pengaturan poster promo popup', { enabled, title }, req);
+
+      return sendJson(req, res, 200, {
+        success: true,
+        message: 'Pengaturan promo popup berhasil disimpan',
+        promo: {
+          enabled: getSetting('promo_popup_enabled', 'true') === 'true',
+          title: getSetting('promo_popup_title', 'PROMO SPESIAL HARI INI'),
+          subtitle: getSetting('promo_popup_subtitle', ''),
+          imageUrl: getSetting('promo_popup_image', ''),
+          actionText: getSetting('promo_popup_action_text', 'Mulai Belanja & Cek Stok'),
+          actionFilter: getSetting('promo_popup_action_filter', ''),
+          updatedAt: now
+        }
+      });
+    } catch (err) {
+      console.error('Error updating promo settings:', err);
+      return sendJson(req, res, 500, { success: false, message: 'Gagal memperbarui promo: ' + err.message });
+    }
+  }
+
+  // POST /api/admin/promo/upload (Upload poster image for promo)
+  if (req.method === 'POST' && pathname === '/api/admin/promo/upload') {
+    try {
+      const auth = req.headers['authorization'] || '';
+      if (!auth.includes('auth-token-admin')) {
+        return sendJson(req, res, 403, { success: false, message: 'Akses ditolak. Silakan login sebagai Admin.' });
+      }
+
+      const body = await parseJsonBody(req);
+      const { imageBase64, fileName } = body;
+
+      if (!imageBase64) {
+        return sendJson(req, res, 400, { success: false, message: 'Data gambar (base64) wajib dikirimkan!' });
+      }
+
+      let ext = '.jpg';
+      if (imageBase64.startsWith('data:image/png')) ext = '.png';
+      else if (imageBase64.startsWith('data:image/webp')) ext = '.webp';
+      else if (fileName) {
+        const fileExt = path.extname(fileName).toLowerCase();
+        if (['.jpg', '.jpeg', '.png', '.webp'].includes(fileExt)) ext = fileExt === '.jpeg' ? '.jpg' : fileExt;
+      }
+
+      const uploadDir = path.join(__dirname, 'public', 'images', 'promo');
+      if (!fs.existsSync(uploadDir)) {
+        fs.mkdirSync(uploadDir, { recursive: true });
+      }
+
+      const uniqueFileName = `promo_poster_${Date.now()}${ext}`;
+      const destPath = path.join(uploadDir, uniqueFileName);
+      const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, '');
+      fs.writeFileSync(destPath, Buffer.from(base64Data, 'base64'));
+
+      const publicUrl = `/images/promo/${uniqueFileName}`;
+      setSetting('promo_popup_image', publicUrl);
+      setSetting('promo_popup_updated_at', new Date().toISOString());
+
+      logActivity('admin', 'Administrator Utama', 'PROMO_UPLOAD', 'PROMO', `Mengunggah poster promo baru: ${uniqueFileName}`, { file: uniqueFileName }, req);
+
+      return sendJson(req, res, 200, {
+        success: true,
+        message: 'Poster promo berhasil diunggah',
+        imageUrl: publicUrl
+      });
+    } catch (err) {
+      console.error('Error uploading promo poster:', err);
+      return sendJson(req, res, 500, { success: false, message: 'Gagal mengunggah poster: ' + err.message });
     }
   }
 

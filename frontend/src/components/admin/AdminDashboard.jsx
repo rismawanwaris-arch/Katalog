@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Package, Tag, Globe, Settings, Users, History, ArrowLeft, LogOut, 
-  Smartphone, Menu, X, RefreshCw, ExternalLink
+  Smartphone, Menu, X, RefreshCw, ExternalLink, Megaphone 
 } from 'lucide-react';
 import ItemsManager from './ItemsManager';
 import CategoriesManager from './CategoriesManager';
@@ -9,6 +9,7 @@ import ApiManager from './ApiManager';
 import UsersManager from './UsersManager';
 import ActivityLogsManager from './ActivityLogsManager';
 import SettingsManager from './SettingsManager';
+import PromoManager from './PromoManager';
 
 export default function AdminDashboard({ adminToken, outlets = [], onExitAdmin, onLogout }) {
   const [activeTab, setActiveTab] = useState('items'); // 'items', 'categories', 'users', 'logs', 'api', 'settings'
@@ -54,6 +55,12 @@ export default function AdminDashboard({ adminToken, outlets = [], onExitAdmin, 
           icon: Tag,
           count: stats ? `${stats.totalCategories}/${stats.totalBrands}` : null,
           description: 'Merk & klasifikasi barang'
+        },
+        {
+          id: 'promo',
+          label: 'Poster & Promo Popup',
+          icon: Megaphone,
+          description: 'Banner popup halaman awal'
         },
       ]
     },
@@ -108,6 +115,12 @@ export default function AdminDashboard({ adminToken, outlets = [], onExitAdmin, 
           title: 'Kategori & Merk (Brand)',
           subtitle: 'Klasifikasi aksesoris, manajemen merk resmi & segmentasi produk',
           icon: Tag
+        };
+      case 'promo':
+        return {
+          title: 'Poster & Promo Popup Halaman Awal',
+          subtitle: 'Pengaturan banner promosi yang muncul otomatis saat membuka website',
+          icon: Megaphone
         };
       case 'users':
         return {
@@ -374,6 +387,10 @@ export default function AdminDashboard({ adminToken, outlets = [], onExitAdmin, 
 
           {activeTab === 'categories' && (
             <CategoriesManager adminToken={adminToken} onStatsUpdated={loadStats} />
+          )}
+
+          {activeTab === 'promo' && (
+            <PromoManager adminToken={adminToken} />
           )}
 
           {activeTab === 'users' && (
