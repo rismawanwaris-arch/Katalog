@@ -178,6 +178,105 @@ try {
   }
 } catch (e) {}
 
+// -----------------------------------------------------------------
+// VISITOR IP TRACKING & ANALYTICS (TAILSCALE & ZIMAOS AWARE)
+// -----------------------------------------------------------------
+db.exec(`
+  CREATE TABLE IF NOT EXISTS visitor_tracking (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ip_address TEXT NOT NULL,
+    network_type TEXT NOT NULL,
+    device_type TEXT,
+    user_agent TEXT,
+    path TEXT NOT NULL,
+    created_at TEXT NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_tracking_ip ON visitor_tracking(ip_address);
+  CREATE INDEX IF NOT EXISTS idx_tracking_time ON visitor_tracking(created_at);
+`);
+
+function detectNetworkType(ip) {
+  if (!ip) return 'Unknown';
+  if (ip === '127.0.0.1' || ip === '::1' || ip === 'localhost') {
+    return 'Localhost';
+  }
+  // Tailscale IP range: 100.64.0.0/10 (100.64.0.0 - 100.127.255.255)
+  if (ip.startsWith('100.')) {
+    const parts = ip.split('.').map(Number);
+    if (parts[1] >= 64 && parts[1] <= 127) {
+      return 'Tailscale';
+    }
+  }
+  // Local LAN
+  if (ip.startsWith('192.168.') || ip.startsWith('10.') || ip.startsWith('172.16.') || ip.startsWith('172.31.')) {
+    return 'Local LAN';
+  }
+  return 'Public IP';
+}
+
+function getClientIp(req) {
+  let ip = null;
+  if (req.headers['cf-connecting-ip']) {
+    ip = req.headers['cf-connecting-ip'];
+  } else if (req.headers['x-real-ip']) {
+    ip = req.headers['x-real-ip'];
+  } else if (req.headers['x-forwarded-for']) {
+    const list = req.headers['x-forwarded-for'].split(',');
+    ip = list[0].trim();
+  } else if (req.socket && req.socket.remoteAddress) {
+    ip = req.socket.remoteAddress;
+  }
+  if (!ip) return '0.0.0.0';
+  if (ip.startsWith('::ffff:')) {
+    ip = ip.substring(7);
+  }
+  return ip;
+}
+
+function parseUserAgent(ua) {
+  if (!ua) return 'Unknown Device';
+  let os = 'Unknown OS';
+  if (ua.includes('Windows')) os = 'Windows PC';
+  else if (ua.includes('Android')) os = 'Android';
+  else if (ua.includes('iPhone')) os = 'iPhone';
+  else if (ua.includes('iPad')) os = 'iPad';
+  else if (ua.includes('Mac OS')) os = 'Mac';
+  else if (ua.includes('Linux')) os = 'Linux';
+
+  let browser = 'Browser';
+  if (ua.includes('Chrome') && !ua.includes('Edg')) browser = 'Chrome';
+  else if (ua.includes('Safari') && !ua.includes('Chrome')) browser = 'Safari';
+  else if (ua.includes('Firefox')) browser = 'Firefox';
+  else if (ua.includes('Edg')) browser = 'Edge';
+
+  return `${os} (${browser})`;
+}
+
+function recordVisitor(req, pathname) {
+  try {
+    const ip = getClientIp(req);
+    const ua = req.headers['user-agent'] || '';
+    const networkType = detectNetworkType(ip);
+    const deviceType = parseUserAgent(ua);
+    const now = new Date().toISOString();
+
+    db.prepare(`
+      INSERT INTO visitor_tracking (ip_address, network_type, device_type, user_agent, path, created_at)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).run(ip, networkType, deviceType, ua, pathname, now);
+  } catch (err) {
+    console.error('Error recording visitor tracking:', err.message);
+  }
+}
+
+function renderTrackingDashboardHtml() {
+  const filePath = path.join(__dirname, 'public', 'tracking.html');
+  if (fs.existsSync(filePath)) {
+    return fs.readFileSync(filePath, 'utf8');
+  }
+  return '<!DOCTYPE html><html><body><h1>Dashboard tracking.html tidak ditemukan</h1></body></html>';
+}
+
 // Auto-sync product photos from public/images/products on startup
 function autoSyncLocalProductImages() {
   const imagesDir = path.join(__dirname, 'public', 'images', 'products');
@@ -2661,8 +2760,101 @@ const server = http.createServer(async (req, res) => {
   }
 
   // -----------------------------------------------------------------
+  // 26. IP TRACKING & ANALYTICS ROUTES
+  // -----------------------------------------------------------------
+
+  // GET /tracking (Dashboard UI)
+  if (req.method === 'GET' && (pathname === '/tracking' || pathname === '/admin/tracking')) {
+    recordVisitor(req, pathname);
+    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+    return res.end(renderTrackingDashboardHtml());
+  }
+
+  // GET /api/tracking/stats (JSON Data for Dashboard)
+  if (req.method === 'GET' && pathname === '/api/tracking/stats') {
+    try {
+      const topIps = db.prepare(`
+        SELECT
+          ip_address as ip,
+          network_type as networkType,
+          device_type as deviceType,
+          COUNT(*) as count,
+          MAX(created_at) as lastSeen,
+          MIN(created_at) as firstSeen
+        FROM visitor_tracking
+        GROUP BY ip_address
+        ORDER BY count DESC
+      `).all();
+
+      const totalHits = topIps.reduce((acc, cur) => acc + cur.count, 0);
+      const recentLogs = db.prepare(`
+        SELECT id, ip_address as ip, network_type as networkType, device_type as deviceType, path, created_at as timestamp
+        FROM visitor_tracking
+        ORDER BY id DESC
+        LIMIT 100
+      `).all();
+
+      return sendJson(req, res, 200, {
+        totalHits,
+        uniqueIps: topIps.length,
+        topIps,
+        recentLogs
+      });
+    } catch (err) {
+      return sendJson(req, res, 500, { success: false, message: err.message });
+    }
+  }
+
+  // GET /api/tracking/export (Export CSV)
+  if (req.method === 'GET' && pathname === '/api/tracking/export') {
+    try {
+      const topIps = db.prepare(`
+        SELECT
+          ip_address as ip,
+          network_type as networkType,
+          device_type as deviceType,
+          COUNT(*) as count,
+          MAX(created_at) as lastSeen,
+          MIN(created_at) as firstSeen
+        FROM visitor_tracking
+        GROUP BY ip_address
+        ORDER BY count DESC
+      `).all();
+
+      let csv = 'Rank,IP Address,Network Type,Total Hits,First Seen,Last Seen,Device Type\n';
+      topIps.forEach((item, index) => {
+        csv += `"${index + 1}","${item.ip}","${item.networkType}","${item.count}","${item.firstSeen}","${item.lastSeen}","${(item.deviceType || '').replace(/"/g, '""')}"\n`;
+      });
+
+      res.writeHead(200, {
+        'Content-Type': 'text/csv; charset=utf-8',
+        'Content-Disposition': 'attachment; filename="ip_tracking_report.csv"',
+        'Cache-Control': 'no-cache'
+      });
+      return res.end(csv);
+    } catch (err) {
+      return sendJson(req, res, 500, { success: false, message: err.message });
+    }
+  }
+
+  // POST /api/tracking/reset (Reset Visitor Tracking)
+  if (req.method === 'POST' && pathname === '/api/tracking/reset') {
+    try {
+      db.prepare('DELETE FROM visitor_tracking').run();
+      logActivity('admin', 'Administrator Utama', 'TRACKING_RESET', 'TRACKING', 'Data visitor tracking direset.', null, req);
+      return sendJson(req, res, 200, { success: true, message: 'Data tracking berhasil direset.' });
+    } catch (err) {
+      return sendJson(req, res, 500, { success: false, message: err.message });
+    }
+  }
+
+  // -----------------------------------------------------------------
   // STATIC FILE SERVING
   // -----------------------------------------------------------------
+  if (pathname === '/' || pathname === '/index.html') {
+    recordVisitor(req, '/');
+  }
+
   let filePath = path.join(__dirname, 'public', pathname === '/' ? 'index.html' : pathname);
 
   if (!fs.existsSync(filePath)) {

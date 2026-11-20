@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>IP Tracking & Analytics - Katalog Aksesoris</title>
+  <style>
+    :root {
+      --bg: #0b1329;
+      --card-bg: #152243;
+      --card-border: #233564;
+      --text: #f1f5f9;
+      --text-muted: #94a3b8;
+      --primary: #38bdf8;
+      --primary-hover: #0284c7;
+      --accent-tailscale: #10b981;
+      --accent-lan: #3b82f6;
+      --accent-public: #f59e0b;
+      --accent-local: #8b5cf6;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      padding: 24px;
+      line-height: 1.5;
+    }
+    .container {
+      max-width: 1300px;
+      margin: 0 auto;
+    }
+    header {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+      padding-bottom: 24px;
+      border-bottom: 1px solid var(--card-border);
+      margin-bottom: 24px;
+    }
+    .header-title h1 {
+      font-size: 26px;
+      font-weight: 700;
+      color: var(--primary);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .header-title p {
+      color: var(--text-muted);
+      font-size: 14px;
+      margin-top: 4px;
+    }
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .btn {
+      padding: 9px 16px;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      border: 1px solid transparent;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      text-decoration: none;
+      transition: all 0.2s;
+    }
+    .btn-primary {
+      background: var(--primary);
+      color: #0b1329;
+    }
+    .btn-primary:hover {
+      background: var(--primary-hover);
+    }
+    .btn-outline {
+      background: transparent;
+      border-color: var(--card-border);
+      color: var(--text);
+    }
+    .btn-outline:hover {
+      background: var(--card-border);
+    }
+    .btn-danger {
+      background: transparent;
+      border-color: #ef4444;
+      color: #ef4444;
+    }
+    .btn-danger:hover {
+      background: #ef4444;
+      color: #fff;
+    }
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    .stat-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      padding: 20px;
+    }
+    .stat-card .label {
+      font-size: 13px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      font-weight: 600;
+    }
+    .stat-card .value {
+      font-size: 32px;
+      font-weight: 700;
+      color: #fff;
+      margin-top: 8px;
+    }
+    .stat-card .subtext {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: 4px;
+    }
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 24px;
+    }
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+    .card-title {
+      font-size: 18px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .filter-box {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .filter-input {
+      background: #0b1329;
+      border: 1px solid var(--card-border);
+      color: var(--text);
+      padding: 8px 12px;
+      border-radius: 6px;
+      font-size: 13px;
+      outline: none;
+    }
+    .filter-input:focus {
+      border-color: var(--primary);
+    }
+    .table-responsive {
+      overflow-x: auto;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+      text-align: left;
+    }
+    th, td {
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--card-border);
+    }
+    th {
+      background: rgba(11, 19, 41, 0.6);
+      color: var(--text-muted);
+      font-weight: 600;
+      text-transform: uppercase;
+      font-size: 11px;
+      letter-spacing: 0.5px;
+    }
+    tr:hover td {
+      background: rgba(255, 255, 255, 0.02);
+    }
+    .badge {
+      display: inline-block;
+      padding: 3px 8px;
+      border-radius: 9999px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .badge-tailscale {
+      background: rgba(16, 185, 129, 0.15);
+      color: #34d399;
+      border: 1px solid rgba(16, 185, 129, 0.3);
+    }
+    .badge-lan {
+      background: rgba(59, 130, 246, 0.15);
+      color: #60a5fa;
+      border: 1px solid rgba(59, 130, 246, 0.3);
+    }
+    .badge-public {
+      background: rgba(245, 158, 11, 0.15);
+      color: #fbbf24;
+      border: 1px solid rgba(245, 158, 11, 0.3);
+    }
+    .badge-local {
+      background: rgba(139, 92, 246, 0.15);
+      color: #a78bfa;
+      border: 1px solid rgba(139, 92, 246, 0.3);
+    }
+    .ip-code {
+      font-family: monospace;
+      font-size: 13px;
+      font-weight: 600;
+      color: #e2e8f0;
+    }
+    .bar-container {
+      width: 100%;
+      background: #0b1329;
+      height: 6px;
+      border-radius: 3px;
+      overflow: hidden;
+      margin-top: 4px;
+    }
+    .bar-fill {
+      height: 100%;
+      background: var(--primary);
+      border-radius: 3px;
+    }
+    .pulse-dot {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #10b981;
+      margin-right: 6px;
+      box-shadow: 0 0 8px #10b981;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="header-title">
+        <h1><span>📊</span> IP Visitor Tracking & Analytics</h1>
+        <p>Monitoring akses IP address (Tailscale VPN, Local LAN & Public) secara real-time pada ZimaOS</p>
+      </div>
+      <div class="header-actions">
+        <label style="display:flex; align-items:center; gap:6px; font-size:13px; color:var(--text-muted); cursor:pointer;">
+          <input type="checkbox" id="chkAutoRefresh" checked onchange="toggleAutoRefresh()"> Auto-Refresh (5s)
+        </label>
+        <button class="btn btn-outline" onclick="refreshData()">🔄 Refresh</button>
+        <a href="/api/tracking/export" class="btn btn-outline">📥 Export CSV</a>
+        <button class="btn btn-danger" onclick="resetLogs()">🗑️ Reset</button>
+        <a href="/" class="btn btn-primary">⬅ Kembali ke Katalog</a>
+      </div>
+    </header>
+
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="label">Total Akses (Hits)</div>
+        <div class="value" id="valTotalHits">0</div>
+        <div class="subtext">Seluruh permintaan tercatat</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Total Unique IP</div>
+        <div class="value" id="valUniqueIps">0</div>
+        <div class="subtext">Alamat IP unik berbeda</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Tailscale VPN Hits</div>
+        <div class="value" style="color: #34d399;" id="valTailscaleHits">0</div>
+        <div class="subtext">Jaringan Tailscale (100.x.y.z)</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Local LAN / Localhost</div>
+        <div class="value" style="color: #60a5fa;" id="valLanHits">0</div>
+        <div class="subtext">Jaringan Wi-Fi/Ethernet lokal</div>
+      </div>
+    </div>
+
+    <!-- Top IPs Card -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">
+          <span>🔥</span> Top IP Paling Sering Mengakses
+        </div>
+        <div class="filter-box">
+          <input type="text" id="inputSearchIp" class="filter-input" placeholder="Cari IP / Device..." oninput="filterTopIps()">
+        </div>
+      </div>
+      <div class="table-responsive">
+        <table>
+          <thead>
+            <tr>
+              <th style="width: 50px;">Rank</th>
+              <th>IP Address</th>
+              <th>Tipe Jaringan</th>
+              <th>Perangkat / Browser</th>
+              <th>Jumlah Akses</th>
+              <th>Pertama Dilihat</th>
+              <th>Terakhir Dilihat</th>
+            </tr>
+          </thead>
+          <tbody id="tblTopIps">
+            <tr><td colspan="7" style="text-align:center; color:var(--text-muted); padding:30px;">Memuat data tracking...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Recent Logs Card -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">
+          <span class="pulse-dot"></span> Log Akses Terkini (100 Terakhir)
+        </div>
+        <div style="font-size:12px; color:var(--text-muted);" id="lblLastUpdated">
+          Updated: -
+        </div>
+      </div>
+      <div class="table-responsive">
+        <table>
+          <thead>
+            <tr>
+              <th style="width: 60px;">ID</th>
+              <th>Waktu</th>
+              <th>IP Address</th>
+              <th>Jaringan</th>
+              <th>Path / Endpoint</th>
+              <th>Device Info</th>
+            </tr>
+          </thead>
+          <tbody id="tblRecentLogs">
+            <tr><td colspan="6" style="text-align:center; color:var(--text-muted); padding:30px;">Memuat log akses...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let refreshTimer = null;
+    let rawStats = null;
+
+    function formatTime(isoStr) {
+      if (!isoStr) return '-';
+      try {
+        const d = new Date(isoStr);
+        return d.toLocaleString('id-ID', {
+          year: 'numeric', month: '2-digit', day: '2-digit',
+          hour: '2-digit', minute: '2-digit', second: '2-digit',
+          hour12: false
+        });
+      } catch (e) {
+        return isoStr;
+      }
+    }
+
+    function getNetworkBadge(type) {
+      if (type === 'Tailscale') return '<span class="badge badge-tailscale">Tailscale VPN</span>';
+      if (type === 'Local LAN') return '<span class="badge badge-lan">Local LAN</span>';
+      if (type === 'Localhost') return '<span class="badge badge-local">Localhost</span>';
+      return '<span class="badge badge-public">Public IP</span>';
+    }
+
+    async function refreshData() {
+      try {
+        const res = await fetch('/api/tracking/stats');
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const data = await res.json();
+        rawStats = data;
+
+        document.getElementById('valTotalHits').innerText = (data.totalHits || 0).toLocaleString();
+        document.getElementById('valUniqueIps').innerText = (data.uniqueIps || 0).toLocaleString();
+
+        let tsHits = 0;
+        let lanHits = 0;
+        if (data.topIps) {
+          data.topIps.forEach(i => {
+            if (i.networkType === 'Tailscale') tsHits += i.count;
+            else if (i.networkType === 'Local LAN' || i.networkType === 'Localhost') lanHits += i.count;
+          });
+        }
+        document.getElementById('valTailscaleHits').innerText = tsHits.toLocaleString();
+        document.getElementById('valLanHits').innerText = lanHits.toLocaleString();
+
+        renderTopIpsTable(data.topIps);
+        renderRecentLogsTable(data.recentLogs);
+        document.getElementById('lblLastUpdated').innerText = 'Updated: ' + new Date().toLocaleTimeString('id-ID');
+      } catch (err) {
+        console.error('Gagal memuat data tracking:', err);
+      }
+    }
+
+    function renderTopIpsTable(items) {
+      const tbody = document.getElementById('tblTopIps');
+      if (!items || items.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color:var(--text-muted); padding:30px;">Belum ada data kunjungan yang tercatat.</td></tr>';
+        return;
+      }
+
+      const query = (document.getElementById('inputSearchIp').value || '').toLowerCase().trim();
+      const filtered = items.filter(it => {
+        return (it.ip || '').toLowerCase().includes(query) ||
+               (it.deviceType || '').toLowerCase().includes(query) ||
+               (it.networkType || '').toLowerCase().includes(query);
+      });
+
+      if (filtered.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color:var(--text-muted); padding:30px;">Tidak ada IP yang cocok dengan pencarian.</td></tr>';
+        return;
+      }
+
+      const maxHits = items[0] ? items[0].count : 1;
+      let html = '';
+      filtered.forEach((item, idx) => {
+        const pct = Math.round((item.count / maxHits) * 100);
+        html += `
+          <tr>
+            <td style="font-weight:700; color:${idx < 3 ? 'var(--primary)' : 'var(--text-muted)'};">#${idx + 1}</td>
+            <td><span class="ip-code">${item.ip}</span></td>
+            <td>${getNetworkBadge(item.networkType)}</td>
+            <td style="color:var(--text-muted);">${item.deviceType || 'Unknown'}</td>
+            <td>
+              <div style="font-weight:700; font-size:14px;">${item.count.toLocaleString()} hits</div>
+              <div class="bar-container"><div class="bar-fill" style="width: ${pct}%;"></div></div>
+            </td>
+            <td style="color:var(--text-muted); font-size:12px;">${formatTime(item.firstSeen)}</td>
+            <td style="color:var(--text-muted); font-size:12px;">${formatTime(item.lastSeen)}</td>
+          </tr>
+        `;
+      });
+      tbody.innerHTML = html;
+    }
+
+    function renderRecentLogsTable(logs) {
+      const tbody = document.getElementById('tblRecentLogs');
+      if (!logs || logs.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:var(--text-muted); padding:30px;">Belum ada log akses.</td></tr>';
+        return;
+      }
+
+      let html = '';
+      logs.forEach(log => {
+        html += `
+          <tr>
+            <td style="color:var(--text-muted); font-family:monospace;">${log.id}</td>
+            <td style="font-size:12px; white-space:nowrap;">${formatTime(log.timestamp)}</td>
+            <td><span class="ip-code">${log.ip}</span></td>
+            <td>${getNetworkBadge(log.networkType)}</td>
+            <td><code style="color:var(--primary); font-size:12px;">${log.path || '/'}</code></td>
+            <td style="color:var(--text-muted); font-size:12px;">${log.deviceType || '-'}</td>
+          </tr>
+        `;
+      });
+      tbody.innerHTML = html;
+    }
+
+    function filterTopIps() {
+      if (rawStats) {
+        renderTopIpsTable(rawStats.topIps);
+      }
+    }
+
+    function toggleAutoRefresh() {
+      const isAuto = document.getElementById('chkAutoRefresh').checked;
+      if (isAuto) {
+        if (!refreshTimer) refreshTimer = setInterval(refreshData, 5000);
+      } else {
+        if (refreshTimer) {
+          clearInterval(refreshTimer);
+          refreshTimer = null;
+        }
+      }
+    }
+
+    async function resetLogs() {
+      if (!confirm('Yakin ingin mereset seluruh data log tracking IP?')) return;
+      try {
+        const res = await fetch('/api/tracking/reset', { method: 'POST' });
+        if (res.ok) {
+          alert('Data tracking berhasil direset!');
+          refreshData();
+        }
+      } catch (e) {
+        alert('Gagal mereset data: ' + e.message);
+      }
+    }
+
+    refreshData();
+    toggleAutoRefresh();
+  </script>
+</body>
+</html>
